@@ -11,14 +11,15 @@ const PORT = process.env.PORT || 9000;
 const app = express({limit: '50mb'});
 app.use(express.json());
 
-app.use(express.urlencoded({extended: true}));
-
-app.use('/api', routes)
-
 const corsOptions = {
     origin: 'http://localhost:5173'
 };
 app.use(cors());
+app.use(express.urlencoded({extended: true}));
+
+app.use('/api-v1', routes)
+
+
 
 app.get('', (req,res)=>{
     res.send('hHello new World');

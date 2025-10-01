@@ -14,7 +14,7 @@ export const registerHospital = async (req, res)=>{
             )
         }
 
-        const hospitalExist = await pool.query('SELECT * FROM hospital WHERE hospital_license_number= $1 OR contact_number = $3' , [hospital_license_number,contact_number]);
+        const hospitalExist = await pool.query('SELECT * FROM hospitals WHERE hospital_license_number= $1 OR contact_number = $2' , [hospital_license_number,contact_number]);
 
         if( hospitalExist.rows.length>0){
             return res.status(400).json(
@@ -24,7 +24,7 @@ export const registerHospital = async (req, res)=>{
                 }
             )
         }
-        const newHospital = await pool.query( `INSERT INTO hospital 
+        const newHospital = await pool.query( `INSERT INTO hospitals 
             (hospital_name,hospital_type,hospital_license_number,address_line,city,state,country,zip_code,contact_number,email,accredition_status)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) 
             RETURNING hospital_id`,

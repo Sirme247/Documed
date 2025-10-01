@@ -6,11 +6,12 @@ import { registerVisit,recordVitals,recordDiagnosis,
 
 const router = express.Router();
 
-router.post('register-visit,', registerVisit);
-router.post('record-vitals,', recordVitals);
-router.post('record-diagnosis,', recordDiagnosis);
-router.post('record-treatments,', recordTreatments);
-router.post('record-visit-prescriptions,', recordVisitPrescriptions);
-router.post('record-lab-tests,', RecordLabTests);
-router.post('record-imaging-results,', recordImagingResults);
+router.post('/register-visit', registerVisit);
+router.post('/record-vitals', recordVitals);
+router.post('/record-diagnosis', recordDiagnosis);
+router.post('/record-treatments', recordTreatments);
+router.post('/record-visit-prescriptions', recordVisitPrescriptions);
+router.post('/record-lab-tests', RecordLabTests);
+router.post('/record-imaging-results', recordImagingResults);
+
 export default router;

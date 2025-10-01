@@ -12,7 +12,7 @@ export const registerVisit = async (req, res)=>{
             )
         }
 
-        const visitExist = await pool.query('SELECT * FROM patient_visits WHERE visit_number= $1 AND patient_id = $2' , [visit_number,patient_id]);
+        const visitExist = await pool.query('SELECT * FROM visits WHERE visit_number= $1 AND patient_id = $2' , [visit_number,patient_id]);
 
         if( visitExist.rows.length>0){
             return res.status(400).json(
@@ -133,7 +133,7 @@ export const recordTreatments = async (req, res)=>{
             (visit_id,treatment_name,treatment_type,procedure_code,treatment_description,start_date,end_date,outcome,complications,follow_up_required,treatment_notes)    
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
             [
-                visit_id,treatment_name,treatment_type||NULL,procedure_code||NULL,treatment_description||NULL,start_date||NULL,end_date||NULL,outcome||'Ongoing',complications||NULL,follow_up_required||false,treatment_notes||NULL
+                visit_id,treatment_name,treatment_type??null,procedure_code??null,treatment_description??null,start_date??null,end_date??null,outcome??'Ongoing',complications??null,follow_up_required||false,treatment_notes??null
             ]
         )
         res.status(201).json(
@@ -171,7 +171,7 @@ export const recordVisitPrescriptions = async (req, res)=>{
             {
 
                 status: "success",
-                message: "Prescription during visit recorded successfully",
+                message: "Visit prescription recorded successfully",
             }
         )       
     }catch(error){
