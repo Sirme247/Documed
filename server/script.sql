@@ -2,7 +2,7 @@ CREATE TABLE roles (
     role_id SERIAL PRIMARY KEY,
     role_name VARCHAR(50) UNIQUE NOT NULL,
     role_description TEXT,
-    permissions JSONB, 
+    permissions JSONB,
     is_active BOOLEAN DEFAULT TRUE,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -14,8 +14,7 @@ CREATE TABLE roles (
 -- 4. nurse
 -- 5. receptionist
 
-
-CREATE TABLE hospital (
+CREATE TABLE hospitals (
     hospital_id SERIAL PRIMARY KEY,
     hospital_name VARCHAR(255) NOT NULL,
     hospital_type VARCHAR(100) NOT NULL, -- General, Specialty, Clinic
@@ -27,18 +26,20 @@ CREATE TABLE hospital (
     zip_code VARCHAR(20) NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     is_active BOOLEAN DEFAULT TRUE,
-    accreditation_status VARCHAR(100) DEFAULT 'Not Accredited',
+    accredition_status VARCHAR(100) DEFAULT 'Not Accredited',
     contact_number VARCHAR(50) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-create table branches (
+
+CREATE TABLE branches (
     branch_id SERIAL PRIMARY KEY,
-    hospital_id INT REFERENCES hospital(hospital_id) ON DELETE CASCADE,
+    hospital_id INT REFERENCES hospitals(hospital_id) ON DELETE CASCADE,
     branch_name VARCHAR(255) NOT NULL,
     branch_type VARCHAR(100) NOT NULL, -- General, Specialty, Clinic
     branch_license_number VARCHAR(100) NOT NULL,
     address_line VARCHAR(255) NOT NULL,
+    accredition_status VARCHAR(100) DEFAULT 'Not Accredited',
     state VARCHAR(100) NOT NULL,
     city VARCHAR(100) NOT NULL,
     country VARCHAR(100) NOT NULL,
@@ -58,12 +59,13 @@ CREATE TABLE users (
     last_name VARCHAR(100) NOT NULL,
     username VARCHAR(50) UNIQUE NOT NULL,
     employee_id VARCHAR(100) UNIQUE NOT NULL,
-    department VARCHAR(100), 
+    hospital_id INT REFERENCES hospitals(hospital_id),
+    department VARCHAR(100),
     date_of_birth DATE,
     gender VARCHAR(10),
     email VARCHAR(100) UNIQUE NOT NULL,
     contact_info VARCHAR(100),
-    address_line VARCHAR(255),   
+    address_line VARCHAR(255),
     password_hash VARCHAR(255) NOT NULL,
     role_id INT REFERENCES roles(role_id),
     last_login TIMESTAMP,
@@ -78,21 +80,20 @@ CREATE TABLE healthcare_providers (
     provider_id SERIAL PRIMARY KEY,
     license_number VARCHAR(100) UNIQUE NOT NULL,
     license_expiry DATE,
-    specialization VARCHAR(100),    
+    specialization VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE provider_hospitals(
+CREATE TABLE provider_hospitals (
     provider_hospital_id SERIAL PRIMARY KEY,
     provider_id INT REFERENCES healthcare_providers(provider_id) ON DELETE CASCADE,
-    hospital_id INT REFERENCES hospital(hospital_id) ON DELETE CASCADE,
+    hospital_id INT REFERENCES hospitals(hospital_id) ON DELETE CASCADE,
     start_date DATE,
-    end_date DATE, 
+    end_date DATE,
     is_primary BOOLEAN DEFAULT FALSE,
     UNIQUE (provider_id, hospital_id)
 );
-
 
 CREATE TABLE patients (
     patient_id SERIAL PRIMARY KEY,
@@ -102,7 +103,7 @@ CREATE TABLE patients (
     country_of_birth VARCHAR(100),
     country_of_residence VARCHAR(100),
     national_id VARCHAR(50) UNIQUE,
-    date_of_birth DATE, --age
+    date_of_birth DATE, -- age
     gender VARCHAR(10),
     marital_status VARCHAR(50),
     blood_type VARCHAR(5),
@@ -120,7 +121,7 @@ CREATE TABLE patients (
     primary_insurance_provider VARCHAR(100),
     primary_insurance_policy_number VARCHAR(100) UNIQUE,
     secondary_insurance_provider VARCHAR(100),
-    secondary_insurance_number VARCHAR(100) UNIQUE,
+    secondary_insurance_policy_number VARCHAR(100) UNIQUE,
     is_active BOOLEAN DEFAULT TRUE,
     ethnicity VARCHAR(50),
     preffered_language VARCHAR(50),
@@ -131,15 +132,15 @@ CREATE TABLE patients (
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE patient_identifiers(
+CREATE TABLE patient_identifiers (
     identifier_id SERIAL PRIMARY KEY,
     patient_id INT REFERENCES patients(patient_id) ON DELETE CASCADE,
-    hospital_id INT REFERENCES hospital(hospital_id) ON DELETE CASCADE,
+    hospital_id INT REFERENCES hospitals(hospital_id) ON DELETE CASCADE,
     patient_mrn VARCHAR(100) NOT NULL,
-    UNIQUE (hospital_id, patient_mrn), 
-    UNIQUE (patient_id, hospital_id),
-    UNIQUE (hospital_id, patient_mrn)
+    UNIQUE (hospital_id, patient_mrn),
+    UNIQUE (patient_id, hospital_id)
 );
+
 
 
 CREATE TABLE visits (
@@ -148,7 +149,7 @@ CREATE TABLE visits (
     visit_type VARCHAR(50) NOT NULL, -- Outpatient, Inpatient, Emergency
     patient_id INT REFERENCES patients(patient_id),
     provider_id INT REFERENCES healthcare_providers(provider_id),
-    hospital_id INT REFERENCES hospital(hospital_id),
+    hospital_id INT REFERENCES hospitals(hospital_id),
     visit_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     priority_level VARCHAR(50) DEFAULT 'normal',
     referring_provider_name VARCHAR(100),
@@ -248,7 +249,7 @@ CREATE TABLE imaging_results (
     -- performed_by INT REFERENCES healthcare_providers(provider_id),
     image_url TEXT,
     findings TEXT,
-    recommendations TEXT, 
+    reccomendations TEXT, 
     -- notes TEXT, 
     test_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -300,7 +301,7 @@ CREATE TABLE chronic_conditions (
 CREATE TABLE family_history (
     family_history_id SERIAL PRIMARY KEY,
     patient_id INT REFERENCES patients(patient_id),
-    relative_name VARCHAR(100) NOT NULL;
+    relative_name VARCHAR(100) NOT NULL,
     relationship VARCHAR(50) NOT NULL, -- Mother, Father, Sibling, etc.
     relative_patient_id INT REFERENCES patients(patient_id),
     relative_condition_name VARCHAR(200),
@@ -317,7 +318,7 @@ CREATE TABLE social_history (
     drug_use TEXT,
     physical_activity TEXT,
     diet_description TEXT,
-    occupation VARCHAR(100),
+    -- occupation VARCHAR(100),
     living_situation VARCHAR(200),
     support_system TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -404,39 +405,44 @@ CREATE TABLE ai_summaries (
     is_current BOOLEAN DEFAULT TRUE
 );
 -- PATIENT INDEXES
+-- PATIENT INDEXES
 CREATE INDEX idx_patient_mrn ON patient_identifiers(patient_mrn);
 CREATE INDEX idx_patient_name ON patients(last_name, first_name);
 CREATE INDEX idx_patient_national_id ON patients(national_id);
 CREATE INDEX idx_patient_dob ON patients(date_of_birth);
+
 -- PROVIDER INDEXES
 CREATE INDEX idx_provider_name ON users(last_name, first_name);
 CREATE INDEX idx_provider_license ON healthcare_providers(license_number);
 CREATE INDEX idx_provider_hospital ON provider_hospitals(provider_id, hospital_id);
 CREATE INDEX idx_hospital_provider ON provider_hospitals(hospital_id, provider_id);
 CREATE UNIQUE INDEX idx_provider_primary_hospital ON provider_hospitals(provider_id) WHERE is_primary = TRUE;
+
 -- VISIT INDEXES
 CREATE INDEX idx_visit_patient ON visits(patient_id);
 CREATE INDEX idx_visit_provider ON visits(provider_id);
 CREATE INDEX idx_visit_date ON visits(visit_date);
--- Composite: often useful for patient visit lookups
 CREATE INDEX idx_visit_patient_date ON visits(patient_id, visit_date);
+
 -- CLINICAL DATA INDEXES
 CREATE INDEX idx_diagnosis_visit ON diagnoses(visit_id);
-CREATE INDEX idx_prescriptions_visit ON prescriptions(visit_id);
+CREATE INDEX idx_visit_prescriptions_visit ON visit_prescriptions(visit_id);
 CREATE INDEX idx_lab_test_visit ON lab_tests(visit_id);
 CREATE INDEX idx_imaging_visit ON imaging_results(visit_id);
 CREATE INDEX idx_vitals_visit ON vitals(visit_id);
+
 -- AUDIT & SECURITY INDEXES
 CREATE INDEX idx_audit_user_timestamp ON audit_logs(user_id, timestamp);
 CREATE INDEX idx_access_user_timestamp ON access_logs(user_id, timestamp);
 CREATE INDEX idx_audit_patient ON audit_logs(patient_id);
--- PARTIAL INDEXES (active records only)
+
+-- PARTIAL INDEXES
 CREATE INDEX idx_active_providers ON users(user_id) WHERE employment_status = 'Active';
 CREATE INDEX idx_active_patients ON patients(patient_id) WHERE is_active = TRUE;
 
+-- DESCENDING INDEXES
 CREATE INDEX idx_audit_timestamp_desc ON audit_logs(timestamp DESC);
 CREATE INDEX idx_access_timestamp_desc ON access_logs(timestamp DESC);
-
 
 INSERT INTO roles (role_name, role_description, permissions)
 VALUES (

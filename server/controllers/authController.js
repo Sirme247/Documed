@@ -1,5 +1,5 @@
 import {pool} from '../libs/database.js';
-import { hashedPassword, comparePassword } from '../libs/index.js';
+import { hashedPassword, comparePassword,createJWT } from '../libs/index.js';
 
 export const signInUser = async (req, res) =>{
     try{
@@ -25,8 +25,8 @@ export const signInUser = async (req, res) =>{
                     message: "Invalid credentials"
                 });
         }
-
-        const isMatch = await comparePassword(password, user?.password);
+    
+        const isMatch = await comparePassword(password, user?.password_hash);
 
         if (!isMatch){
             return res.status(400).json(

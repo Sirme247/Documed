@@ -2,7 +2,11 @@ import {pool} from '../libs/database.js';
 
 
 export const registerPatient = async (req,res) =>{
+
+    const client = await pool.connect();
     try{
+
+        await client.query('BEGIN');
         const {
             //patient table fields
             first_name,middle_name,last_name,country_of_birth,
@@ -166,6 +170,8 @@ export const registerPatient = async (req,res) =>{
         )
 
         }
+
+        await client.query('COMMIT');
         res.status(201).json(
                 {
                     status: "success",
@@ -178,8 +184,11 @@ export const registerPatient = async (req,res) =>{
 
             
     } catch(error){
+        await client.query('ROLLBACK');
         console.log(error);
         res.status(500).json({message: "Server error"});
+    } finally{
+        client.release();
     }
 }
 
@@ -264,7 +273,7 @@ export const addMedication = async (req,res)=>{
         res.status(201).json(
             {
                 status: "success",
-                message: "Allergy recorded successfully",
+                message: "Medication recorded successfully",
             }
         )
     }catch(error){
@@ -340,7 +349,7 @@ export const addFamilyHistory = async (req,res)=>{
             return res.status(400).json(
                 {
                     status: "failed",
-                    message: "The chronic condition is already recorded",
+                    message: "The family medical history is already recorded",
                     duplicates: FamilyHistoryExists.rows 
                 }
             )
@@ -352,6 +361,10 @@ export const addFamilyHistory = async (req,res)=>{
                 patient_id,relative_name, relationship??null, relative_patient_id??null, relative_condition_name??null, age_of_onset??null,family_history_notes??null
             ]
         )
+         res.status(201).json({
+            status: "success",
+            message: "Family history recorded successfully"
+        });
 
         
 
@@ -382,6 +395,10 @@ export const addSocialHistory = async (req,res)=>{
                 patient_id, smoking_status??null, alcohol_use??null, drug_use??null, physical_activity??null, diet_description??null, living_situation??null, support_system??null
             ]
         )
+         res.status(201).json({
+            status: "success",
+            message: "Social history recorded successfully"
+        });
 
 
 
