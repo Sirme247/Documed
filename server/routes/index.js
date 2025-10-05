@@ -2,7 +2,7 @@ import express from 'express';
 
 import authRoutes from './authRoutes.js';
 import patientRoutes from './patientRoutes.js';
-// import patientRecordsRoutes from './patientRecordsRoutes.js';
+
 import visitRoutes from './visitRoutes.js';
 // import aiRoutes from './aiRoutes.js';
 import hospitalRoutes from './hospitalRoutes.js';
@@ -17,7 +17,6 @@ router.use('/auth', authRoutes);
 router.use('/users', userRoutes);
 router.use('/hospitals', hospitalRoutes);
 router.use('/patients', patientRoutes);
-// router.use('/patients', patientRecordsRoutes);
 router.use('/visits', visitRoutes);
 // router.use('/ai', aiRoutes);
 // router.use('/audits', auditRoutes);

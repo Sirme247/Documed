@@ -22,12 +22,24 @@ export const comparePassword = async(userPassword, password)=>{
     }
 }
 
-export const createJWT = (id)=>{
-    return JWT.sign({
-        user_id: id}, 
-        process.env.JWT_SECRET, {
-            expiresIn: "1d"
-        }
+// export const createJWT = (id)=>{
+//     return JWT.sign({
+//         user_id: id}, 
+//         process.env.JWT_SECRET, {
+//             expiresIn: "1d"
+//         }
         
-    )
-}
+//     )
+// }
+export const createJWT = (user) => {
+  return JWT.sign(
+    {
+      user_id: user.user_id,
+      role_id: user.role_id,
+      hospital_id: user.hospital_id,
+      must_change_password: user.must_change_password
+    },
+    process.env.JWT_SECRET,
+    { expiresIn: "1d" }
+  );
+};
