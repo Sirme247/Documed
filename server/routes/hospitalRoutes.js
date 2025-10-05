@@ -1,9 +1,37 @@
 import express from 'express';
-import{registerHospital,registerHospitalBranch} from '../controllers/hospitalController.js';
+import{registerHospital,registerHospitalBranch,updateHospital,updateHospitalBranch,getHospitalInformation,getBranchInformation} from '../controllers/hospitalController.js';
+import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.post('/register-hospital', registerHospital);
-router.post('/register-hospital-branch', registerHospitalBranch);
+router.use(authMiddleware)
+
+// 1 → superadmin  
+// 2 → localadmin  
+// 3 → medicalprovider  
+// 4 → nurse  
+// 5 → receptionist 
+
+
+
+// Get all branches (of all hospitals)
+router.get('/branches',authMiddleware, getBranchInformation);
+
+// Get all branches of a specific hospital
+router.get('/hospitals/:hospital_id/branches',authMiddleware, getBranchInformation);
+
+// Get a single branch of a specific hospital
+router.get('/hospitals/:hospital_id/branches/:branch_id',authMiddleware, getBranchInformation);
+
+
+
+
+router.get('/hospitals', getHospitalInformation);
+// Get a single hospital by ID
+router.get('/hospitals/:hospital_id', getHospitalInformation);
+router.post('/register-hospital', requireRole(1), registerHospital);
+router.post('/register-hospital-branch', requireRole(1), registerHospitalBranch);
+router.put('/update-hospital', requireRole(1), updateHospital);
+router.put('/update-hospital-branch', requireRole(1), updateHospitalBranch);
 
 export default router;

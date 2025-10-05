@@ -14,6 +14,15 @@ CREATE TABLE roles (
 -- 4. nurse
 -- 5. receptionist
 
+-- CREATE OR REPLACE FUNCTION update_updated_at_column()
+-- RETURNS TRIGGER AS $$
+-- BEGIN
+--   NEW.updated_at = NOW();
+--   RETURN NEW;
+-- END;
+-- $$ language 'plpgsql';
+
+
 CREATE TABLE hospitals (
     hospital_id SERIAL PRIMARY KEY,
     hospital_name VARCHAR(255) NOT NULL,
@@ -52,6 +61,11 @@ CREATE TABLE branches (
     UNIQUE (hospital_id, branch_name)
 );
 
+
+CREATE TYPE account_status_enum AS ENUM ('active', 'suspended', 'locked', 'archived');
+CREATE TYPE employment_status_enum AS ENUM ('active', 'suspended', 'fired');
+CREATE TYPE gender_enum AS ENUM ('female', 'male', 'other');
+
 CREATE TABLE users (
     user_id SERIAL PRIMARY KEY,
     first_name VARCHAR(100) NOT NULL,
@@ -60,17 +74,19 @@ CREATE TABLE users (
     username VARCHAR(50) UNIQUE NOT NULL,
     employee_id VARCHAR(100) UNIQUE NOT NULL,
     hospital_id INT REFERENCES hospitals(hospital_id),
+    branch_id INT REFERENCES branches(branch_id) ON DELETE SET NULL,
     department VARCHAR(100),
     date_of_birth DATE,
-    gender VARCHAR(10),
+    gender gender_enum NOT NULL,
     email VARCHAR(100) UNIQUE NOT NULL,
     contact_info VARCHAR(100),
     address_line VARCHAR(255),
     password_hash VARCHAR(255) NOT NULL,
     role_id INT REFERENCES roles(role_id),
     last_login TIMESTAMP,
-    employment_status VARCHAR(50) DEFAULT 'Active', -- Active, Inactive, Suspended
-    account_status VARCHAR(50) DEFAULT 'active',
+    employment_status employment_status_enum NOT NULL DEFAULT 'active', -- active, fired, suspended
+    account_status account_status_enum NOT NULL DEFAULT 'active', -- active,suspended,locked, archived
+    must_change_password BOOLEAN DEFAULT TRUE,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -89,6 +105,7 @@ CREATE TABLE provider_hospitals (
     provider_hospital_id SERIAL PRIMARY KEY,
     provider_id INT REFERENCES healthcare_providers(provider_id) ON DELETE CASCADE,
     hospital_id INT REFERENCES hospitals(hospital_id) ON DELETE CASCADE,
+    branch_id INT REFERENCES branches(branch_id) ON DELETE CASCADE,
     start_date DATE,
     end_date DATE,
     is_primary BOOLEAN DEFAULT FALSE,
@@ -150,6 +167,7 @@ CREATE TABLE visits (
     patient_id INT REFERENCES patients(patient_id),
     provider_id INT REFERENCES healthcare_providers(provider_id),
     hospital_id INT REFERENCES hospitals(hospital_id),
+    branch_id INT REFERENCES branches(branch_id),
     visit_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     priority_level VARCHAR(50) DEFAULT 'normal',
     referring_provider_name VARCHAR(100),
@@ -262,7 +280,8 @@ CREATE TABLE allergies (
     allergy_severity VARCHAR(50), -- Mild, Moderate, Severe
     verified BOOLEAN DEFAULT FALSE, 
     -- recorded_by INT REFERENCES healthcare_providers(provider_id),
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE medications (
@@ -307,7 +326,8 @@ CREATE TABLE family_history (
     relative_condition_name VARCHAR(200),
     age_of_onset INTEGER,
     family_history_notes TEXT,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE social_history (
@@ -437,7 +457,7 @@ CREATE INDEX idx_access_user_timestamp ON access_logs(user_id, timestamp);
 CREATE INDEX idx_audit_patient ON audit_logs(patient_id);
 
 -- PARTIAL INDEXES
-CREATE INDEX idx_active_providers ON users(user_id) WHERE employment_status = 'Active';
+CREATE INDEX idx_active_providers ON users(user_id) WHERE employment_status = 'active';
 CREATE INDEX idx_active_patients ON patients(patient_id) WHERE is_active = TRUE;
 
 -- DESCENDING INDEXES

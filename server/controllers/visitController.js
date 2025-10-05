@@ -2,8 +2,8 @@ import {pool} from '../libs/database.js';
 
 export const registerVisit = async (req, res)=>{
     try{
-        const {visit_number,visit_type,patient_id,provider_id,hospital_id,priority_level,referring_provider_name,referring_provider_hospital,reason_for_visit,admission_status,discharge_date,notes} = req.body;
-        if(!visit_number || !visit_type || !patient_id || !provider_id || !hospital_id){
+        const {visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id,priority_level,referring_provider_name,referring_provider_hospital,reason_for_visit,admission_status,discharge_date,notes} = req.body;
+        if(!visit_number || !visit_type || !patient_id || !hospital_id){
             return res.status(400).json(
                 {
                     status: "failed",
@@ -23,11 +23,11 @@ export const registerVisit = async (req, res)=>{
             )
         }
         const newVisit = await pool.query( `INSERT INTO visits 
-            (visit_number,visit_type,patient_id,provider_id,hospital_id,priority_level,referring_provider_name,referring_provider_hospital,reason_for_visit,admission_status,discharge_date,notes)
+            (visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id,priority_level,referring_provider_name,referring_provider_hospital,reason_for_visit,admission_status,discharge_date,notes)
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) 
             RETURNING visit_id`,
             [
-                visit_number,visit_type,patient_id,provider_id,hospital_id,priority_level,referring_provider_name??null,referring_provider_hospital??null,reason_for_visit,admission_status??null,discharge_date?? null,notes??null
+                visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id??null,priority_level,referring_provider_name??null,referring_provider_hospital??null,reason_for_visit,admission_status??null,discharge_date?? null,notes??null
             ])
 
         const visit_id = newVisit.rows[0].visit_id;
@@ -201,7 +201,7 @@ export const RecordLabTests = async (req, res)=>{
         res.status(201).json(
             {
                 status: "success",
-                message: "Lab test ordered successfully",
+                message: "Lab test recorded successfully",
             }
         )       
     }catch(error){
@@ -241,3 +241,136 @@ export const recordImagingResults = async (req, res)=>{
     }   
 }
 
+
+export const getVisitDetails = async (req, res) => {
+  try {
+    const { visit_id } = req.params;
+
+    if (!visit_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Visit ID is required",
+      });
+    }
+
+    // ✅ Get visit info with hospital and branch details (including cities)
+    const visitResult = await pool.query(
+      `SELECT 
+          v.*, 
+          p.first_name AS patient_first_name, 
+          p.last_name AS patient_last_name, 
+          h.hospital_name,
+          h.city AS hospital_city,
+          b.branch_name,
+          b.city AS branch_city
+       FROM visits v
+       LEFT JOIN patients p ON v.patient_id = p.patient_id
+       LEFT JOIN hospitals h ON v.hospital_id = h.hospital_id
+       LEFT JOIN branches b ON v.branch_id = b.branch_id
+       WHERE v.visit_id = $1`,
+      [visit_id]
+    );
+
+    if (visitResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Visit not found",
+      });
+    }
+
+    // ✅ Fetch related records concurrently
+    const [
+      vitalsResult,
+      diagnosesResult,
+      treatmentsResult,
+      prescriptionsResult,
+      labTestsResult,
+      imagingResultsResult,
+    ] = await Promise.all([
+      pool.query("SELECT * FROM vitals WHERE visit_id = $1", [visit_id]),
+      pool.query("SELECT * FROM diagnoses WHERE visit_id = $1", [visit_id]),
+      pool.query("SELECT * FROM treatments WHERE visit_id = $1", [visit_id]),
+      pool.query("SELECT * FROM visit_prescriptions WHERE visit_id = $1", [visit_id]),
+      pool.query("SELECT * FROM lab_tests WHERE visit_id = $1", [visit_id]),
+      pool.query("SELECT * FROM imaging_results WHERE visit_id = $1", [visit_id]),
+    ]);
+
+    // ✅ Combine everything
+    const visitData = {
+      ...visitResult.rows[0],
+      vitals: vitalsResult.rows,
+      diagnoses: diagnosesResult.rows,
+      treatments: treatmentsResult.rows,
+      prescriptions: prescriptionsResult.rows,
+      lab_tests: labTestsResult.rows,
+      imaging_results: imagingResultsResult.rows,
+    };
+
+    res.status(200).json({
+      status: "success",
+      message: "Visit data retrieved successfully",
+      data: visitData,
+    });
+  } catch (error) {
+    console.error("Error fetching visit details:", error);
+    res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+export const getPatientVisits = async (req, res) => {
+  try {
+    const { patient_id } = req.params;
+
+    if (!patient_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Patient ID is required",
+      });
+    }
+
+    // ✅ Fetch all visits for a specific patient (with hospital + branch details)
+    const visitsResult = await pool.query(
+      `SELECT 
+          v.visit_id,
+          v.visit_number,
+          v.visit_date,
+          v.visit_type,
+          v.reason_for_visit,
+          v.priority_level,
+          v.hospital_id,
+          h.hospital_name,
+          h.city AS hospital_city,
+          v.branch_id,
+          b.branch_name,
+          b.city AS branch_city,
+          v.created_at,
+          v.updated_at
+       FROM visits v
+       LEFT JOIN hospitals h ON v.hospital_id = h.hospital_id
+       LEFT JOIN branches b ON v.branch_id = b.branch_id
+       WHERE v.patient_id = $1
+       ORDER BY v.visit_date DESC`,
+      [patient_id]
+    );
+
+    if (visitsResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "No visits found for this patient",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Patient visits retrieved successfully",
+      data: visitsResult.rows,
+    });
+  } catch (error) {
+    console.error("Error fetching patient visits:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Server error",
+    });
+  }
+};
