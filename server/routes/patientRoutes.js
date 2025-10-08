@@ -1,10 +1,10 @@
 import express from 'express';
 import {registerPatient,addAllergies,addMedication,
     addChronicConditions,addFamilyHistory,addSocialHistory,updatePatient,updateSocialHistory,  
-      updateAllergy,updateMedication,updateChronicCondition,updateFamilyHistory,getPatientFullProfile} 
+      updateAllergy,updateMedication,updateChronicCondition,updateFamilyHistory,getPatientFullProfile, deletePatient} 
     from '../controllers/patientController.js';
 
-import {authMiddleware} from '../middleware/authMiddleware.js';
+import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 router.use(authMiddleware)
@@ -22,6 +22,7 @@ router.put('/update-allergy', updateAllergy);
 router.put('/update-medication', updateMedication);
 router.put('/update-chronic-condition', updateChronicCondition);
 router.put('/update-family-history', updateFamilyHistory);
+router.delete('/delete-patient/:patient_id',requireRole(1), deletePatient)
 
 
 export default router;

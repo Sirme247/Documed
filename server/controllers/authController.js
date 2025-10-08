@@ -1,11 +1,12 @@
 import {pool} from '../libs/database.js';
 import { hashedPassword, comparePassword, createJWT } from '../libs/index.js';
+import { logAudit } from "../libs/auditLogger.js";
+
 
 export const signInUser = async (req, res) => {
     try {
         const {email, username, password} = req.body;
 
-        // Validate that password is provided along with either email or username
         if (!password || (!email && !username)) {
             return res.status(400).json({
                 status: "failed",
@@ -13,7 +14,6 @@ export const signInUser = async (req, res) => {
             });
         }
 
-        // Query user by email or username (prioritize email if both provided)
 
         const result = await pool.query('SELECT * FROM users WHERE email= $1 OR username = $2' , [email, username]);
         // let result;
@@ -32,7 +32,7 @@ export const signInUser = async (req, res) => {
             });
         }
 
-        // Compare password - ensure correct argument order
+      
         const isMatch = await comparePassword(password, user.password_hash);
 
         if (!isMatch) {
@@ -42,7 +42,7 @@ export const signInUser = async (req, res) => {
             });
         }
 
-        // Check account and employment status
+       
         const blockedAccountStatuses = ['suspended', 'locked', 'archived'];
         const blockedEmploymentStatuses = ['fired', 'suspended'];
 
@@ -62,16 +62,16 @@ export const signInUser = async (req, res) => {
         //     });
         // }
 
-        // Update last login timestamp
+       
         await pool.query(
             'UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = $1',
             [user.user_id]
         );
 
-        // Generate JWT token
+        
         const token = createJWT(user);
 
-        // Remove sensitive data
+       
         delete user.password_hash;
 
         res.status(200).json({

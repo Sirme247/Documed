@@ -7,7 +7,7 @@ import visitRoutes from './visitRoutes.js';
 // import aiRoutes from './aiRoutes.js';
 import hospitalRoutes from './hospitalRoutes.js';
 // import auditRoutes from './auditRoutes.js';
-// import accessRoutes from './accessRoutes.js';
+
 // import exportRoutes from './exportRoutes.js';
 import userRoutes from './userRoutes.js';
 
@@ -20,7 +20,6 @@ router.use('/patients', patientRoutes);
 router.use('/visits', visitRoutes);
 // router.use('/ai', aiRoutes);
 // router.use('/audits', auditRoutes);
-// router.use('/access', accessRoutes);
 // router.use('/export', exportRoutes);
 
 export default router;
