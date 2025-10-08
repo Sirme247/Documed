@@ -1,5 +1,6 @@
 import bcrypt from 'bcrypt';    
 
+import { logAudit } from "../libs/auditLogger.js";
 import {pool} from '../libs/database.js';
 import { hashedPassword, createJWT, comparePassword } from '../libs/index.js';
 
@@ -7,9 +8,7 @@ const safe = (val) => (val !== undefined ? val : null);
 
 export const getUser = async (req, res) => {
   try {
-    const user_id = req.user.user_id; // ✅ Extracted from JWT
-
-    // 🔹 Fetch base user + hospital + branch info
+    const user_id = req.user.user_id; 
     const result = await pool.query(
       `SELECT 
          u.user_id,
@@ -58,7 +57,6 @@ export const getUser = async (req, res) => {
     const user = result.rows[0];
     let provider = null;
 
-    // 🔹 If the user is a healthcare provider (doctor or nurse)
     if (user.role_id === 3 || user.role_id === 4) {
       const providerRes = await pool.query(
         `SELECT 
@@ -91,9 +89,9 @@ export const getUser = async (req, res) => {
       );
 
       if (providerRes.rows.length > 0) {
-        const base = providerRes.rows[0]; // common provider info
+        const base = providerRes.rows[0]; 
 
-        // group hospital + branch data separately
+
         const hospitals = [];
         const branches = [];
 
@@ -143,7 +141,7 @@ export const getUser = async (req, res) => {
       status: "success",
       message: "User fetched successfully",
       user,
-      provider, // will be null for non-providers
+      provider, 
     });
 
   } catch (error) {
@@ -154,7 +152,6 @@ export const getUser = async (req, res) => {
     });
   }
 };
-
 
 
 
@@ -186,13 +183,10 @@ export const registerUser = async (req, res) => {
 
     await client.query("BEGIN");
 
-     // 🔒 Local admin restriction — override hospital_id if necessary
     if (req.user && req.user.role_id === 2) {
       hospital_id = req.user.hospital_id;
     }
 
-
-    // ✅ If branch_id is provided, automatically get hospital_id
     if (branch_id) {
       const branchResult = await client.query(
         "SELECT hospital_id FROM branches WHERE branch_id = $1",
@@ -234,11 +228,9 @@ export const registerUser = async (req, res) => {
     }
 
     const hashed_password = await hashedPassword(password);
-
     const provider_hospital_id = hospital_id;
     const provider_branch_id = branch_id;
 
-    // 👇 For providers, we still store hospital_id = null in users table
     if (role_id === 3) {
       hospital_id = null;
       branch_id = null;
@@ -275,6 +267,26 @@ export const registerUser = async (req, res) => {
     let provider = null;
     let provider_hospital = null;
 
+    await logAudit({
+      user_id: req.user?.user_id || null,
+      table_name: "users",
+      action_type: "register_user",
+      new_values: {
+        user_id: user.user_id,
+        username: user.username,
+        email: user.email,
+        role_id: user.role_id,
+        hospital_id: user.hospital_id,
+        branch_id: user.branch_id
+      },
+      event_type: "CREATE",
+      ip_address: req.ip,
+      branch_id: req.user?.branch_id || null,
+      hospital_id: req.user?.hospital_id || null,
+      request_method: req.method,
+      endpoint: req.originalUrl
+    });
+
     if (role_id === 3 || role_id === 4) {
       const newProvider = await client.query(
         `INSERT INTO healthcare_providers (
@@ -283,7 +295,21 @@ export const registerUser = async (req, res) => {
         RETURNING *`,
         [user.user_id, license_number, license_expiry, specialization]
       );
+
       provider = newProvider.rows[0];
+
+      await logAudit({
+        user_id: req.user?.user_id || null,
+        table_name: "healthcare_providers",
+        action_type: "register_provider",
+        new_values: provider,
+        event_type: "CREATE",
+        ip_address: req.ip,
+        branch_id: req.user?.branch_id || null,
+        hospital_id: req.user?.hospital_id || null,
+        request_method: req.method,
+        endpoint: req.originalUrl
+      });
     }
 
     if (role_id === 3) {
@@ -293,7 +319,21 @@ export const registerUser = async (req, res) => {
          RETURNING *`,
         [provider.provider_id, provider_hospital_id, provider_branch_id, start_date]
       );
+
       provider_hospital = providerHospital.rows[0];
+
+      await logAudit({
+        user_id: req.user?.user_id || null,
+        table_name: "provider_hospitals",
+        action_type: "assign_provider_to_hospital",
+        new_values: provider_hospital,
+        event_type: "CREATE",
+        ip_address: req.ip,
+        branch_id: provider_branch_id,
+        hospital_id: provider_hospital_id,
+        request_method: req.method,
+        endpoint: req.originalUrl
+      });
     }
 
     await client.query("COMMIT");
@@ -317,379 +357,409 @@ export const registerUser = async (req, res) => {
   }
 };
 
-
-
 export const registerExistingMedicalPractitioner = async (req, res) => {
-    const client = await pool.connect();
-    try {
-        let { user_id, license_number, hospital_id, start_date } = req.body;
-
-        if (!user_id || !license_number || !hospital_id) {
-            return res.status(400).json({
-                status: "failed",
-                message: "Please fill all required fields"
-            });
-        }
-
-        // 🔒 Enforce local admin hospital restriction
-        if (req.user.role_id === 2) {
-            hospital_id = req.user.hospital_id;
-        }
-
-        await client.query("BEGIN");
-
-        // 1. Check if user exists
-        const userExists = await client.query("SELECT * FROM users WHERE user_id=$1", [user_id]);
-        if (!userExists.rows[0]) {
-            await client.query("ROLLBACK");
-            return res.status(404).json({
-                status: "failed",
-                message: "User not found"
-            });
-        }
-
-        // 2. Ensure user is a healthcare provider
-        const providerResult = await client.query(
-            "SELECT provider_id FROM healthcare_providers WHERE user_id = $1",
-            [user_id]
-        );
-
-        if (!providerResult.rows[0]) {
-            await client.query("ROLLBACK");
-            return res.status(404).json({
-                status: "failed",
-                message: "User is not registered as a healthcare provider"
-            });
-        }
-
-        const provider_id = providerResult.rows[0].provider_id;
-
-        // 3. Check if already linked to hospital
-        const existingLink = await client.query(
-            "SELECT 1 FROM provider_hospitals WHERE provider_id=$1 AND hospital_id=$2",
-            [provider_id, hospital_id]
-        );
-
-        if (existingLink.rows.length > 0) {
-            await client.query("ROLLBACK");
-            return res.status(400).json({
-                status: "failed",
-                message: "Practitioner is already registered in this hospital"
-            });
-        }
-
-        // 4. Insert new provider-hospital link
-        const newProviderHospital = await client.query(
-            `INSERT INTO provider_hospitals (provider_id, hospital_id, start_date)
-             VALUES ($1, $2, $3)
-             RETURNING *`,
-            [provider_id, hospital_id, start_date]
-        );
-
-        await client.query("COMMIT");
-
-        res.status(201).json({
-            status: "success",
-            message: "Existing practitioner registered successfully in hospital",
-            provider_id,
-            providerHospital: newProviderHospital.rows[0]
-        });
-
-    } catch (error) {
-        await client.query("ROLLBACK");
-        console.error(error);
-        res.status(500).json({ message: "Server error" });
-    } finally {
-        client.release();
-    }
-};
-
-
-export const passwordChange = async (req, res) =>{
-    try{
-        const user_id = req.user.user_id;
-
-        let {current_password, new_password,confirm_password} = req.body;
-
-        const userExists = await pool.query('SELECT * FROM users WHERE user_id=$1',[user_id]);
-
-        const user = userExists.rows[0]
-
-        if (!user){
-            return res
-            .status(404)
-            .json({status:"failed", message:"User not found"});
-        }
-
-        if(new_password !== confirm_password){
-             return res
-            .status(401)
-            .json({status:"failed", message:"Passwords do not match"});   
-        }
-
-        const isMatch = await comparePassword(current_password, user?.password_hash);
-
-        if(!isMatch){
-             return res
-            .status(401)
-            .json({status:"failed", message:"Invalid current password"});   
-
-        }
-
-        const hashed_password = await hashedPassword(new_password);
-        
-        await pool.query('UPDATE users SET password_hash = $1, must_change_password = false WHERE user_id = $2',[hashed_password,user_id])
-         
-        res.status(200).json(
-        {
-            status: "success",
-            message: "Password successfully changed"
-        }
-    );
-
-    } catch(error){
-        console.log(error);
-        res.status(500).json({message: "Server error"});
-    }
-}
-
-
-export const adminResetPassword = async (req, res) => {
+  const client = await pool.connect();
   try {
-    const { user_id, temp_password } = req.body;
+    let { user_id, license_number, hospital_id, start_date } = req.body;
 
+    if (!user_id || !license_number || !hospital_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Please fill all required fields",
+      });
+    }
 
-    const userExists = await pool.query("SELECT * FROM users WHERE user_id=$1", [user_id]);
+    if (req.user.role_id === 2) {
+      hospital_id = req.user.hospital_id;
+    }
+
+    await client.query("BEGIN");
+
+    const userExists = await client.query("SELECT * FROM users WHERE user_id=$1", [user_id]);
     if (!userExists.rows[0]) {
+      await client.query("ROLLBACK");
       return res.status(404).json({
-        status: "failed", 
-        message: "User not found" });
-    }
-    // const userHospital = await pool.query('SELECT hospital_id FROM users WHERE user_id = $1',[user_id]);
-
-    const adminRole = req.user.role_id
-    const adminHospitalid = req.user.hospital_id;
-    
-
-     if(adminRole === 2 && userExists.rows[0].role_id === 3){
-        const provider = await pool.query(
-           'SELECT provider_id FROM healthcare_providers WHERE user_id=$1',
-            [userExists.rows[0].user_id]
-        );
-        if (!provider.rows[0]) {
-            return res.status(404).json({ status: "failed", message: "Provider not found" });
-        }
-
-        const providerHospitals = await pool.query(
-            'SELECT hospital_id FROM provider_hospitals WHERE provider_id=$1',
-            [provider.rows[0].provider_id]
-        );
-
-        const hospitalIds = providerHospitals.rows.map(r => r.hospital_id);
-
-        if(!hospitalIds.includes(adminHospitalid)){
-            return res.status(403).json({ status: "failed", message: "Access denied" });
-        }
-    }else {
-    
-        if(adminRole === 2 && adminHospitalid !== userExists.rows[0].hospital_id){
-            return res.status(403).json({ status: "failed", message: "Access denied" });
-        }
+        status: "failed",
+        message: "User not found",
+      });
     }
 
-    
-
-    const hashed_password = await hashedPassword(temp_password);
-
-    await pool.query(
-      "UPDATE users SET password_hash=$1, must_change_password=true WHERE user_id=$2",
-      [hashed_password, user_id]
+    const providerResult = await client.query(
+      "SELECT provider_id FROM healthcare_providers WHERE user_id = $1",
+      [user_id]
     );
 
-    res.status(200).json({
+    if (!providerResult.rows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        status: "failed",
+        message: "User is not registered as a healthcare provider",
+      });
+    }
+
+    const provider_id = providerResult.rows[0].provider_id;
+
+    const existingLink = await client.query(
+      "SELECT 1 FROM provider_hospitals WHERE provider_id=$1 AND hospital_id=$2",
+      [provider_id, hospital_id]
+    );
+
+    if (existingLink.rows.length > 0) {
+      await client.query("ROLLBACK");
+      return res.status(400).json({
+        status: "failed",
+        message: "Practitioner is already registered in this hospital",
+      });
+    }
+
+    const newProviderHospital = await client.query(
+      `INSERT INTO provider_hospitals (provider_id, hospital_id, start_date)
+       VALUES ($1, $2, $3)
+       RETURNING *`,
+      [provider_id, hospital_id, start_date]
+    );
+  
+    await client.query(
+      `INSERT INTO audit_logs (
+         user_id, action, entity, entity_id, description, timestamp
+       ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [
+        req.user.user_id,
+        "REGISTER_EXISTING_PRACTITIONER",
+        "provider_hospitals",
+        newProviderHospital.rows[0].id || null,
+        `Linked provider_id=${provider_id} (license=${license_number}) to hospital_id=${hospital_id} starting ${start_date}`,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(201).json({
       status: "success",
-      message: "Temporary password set. User must change on next login."
+      message: "Existing practitioner registered successfully in hospital",
+      provider_id,
+      providerHospital: newProviderHospital.rows[0],
     });
 
   } catch (error) {
+    await client.query("ROLLBACK");
     console.error(error);
     res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
   }
 };
 
 
-export const adminUpdateUser = async (req, res) => {
-    const client = await pool.connect()
-    try {
-        const { user_id } = req.body; 
+export const passwordChange = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const user_id = req.user.user_id;
+    const { current_password, new_password, confirm_password } = req.body;
 
-        const currentUserId = req.user.user_id;
+    const userExists = await client.query("SELECT * FROM users WHERE user_id=$1", [user_id]);
+    const user = userExists.rows[0];
 
-        if(user_id === currentUserId){
-           return res.status(401).json({
-            status: "Denied",
-            message: "Cannot perform operation on self"
-          });
-        }
-
-        const {
-            first_name,
-            middle_name,
-            last_name,
-            username,
-            employee_id,
-            // hospital_id,
-            department,
-            date_of_birth,
-            gender,
-            email,
-            contact_info,
-            address_line,
-            role_id,
-            employment_status,
-            account_status,
-           
-            license_number,
-            license_expiry,
-            specialization
-        } = req.body;
-
-        await client.query("BEGIN");
-
-        const userExists = await client.query('SELECT * FROM users WHERE user_id = $1', [user_id]);
-        if (!userExists.rows[0]) {
-            return res.status(404).json({
-                status: "failed",
-                message: "User not found"
-            });
-        }
-        const adminRole = req.user.role_id
-        const adminHospitalid = req.user.hospital_id;
-        
-        if(adminRole === 2 && userExists.rows[0].role_id === 3){
-        const provider = await client.query(
-           'SELECT provider_id FROM healthcare_providers WHERE user_id=$1',
-            [userExists.rows[0].user_id]
-        );
-        if (!provider.rows[0]) {
-            return res.status(404).json({ status: "failed", message: "Provider not found" });
-        }
-
-        const providerHospitals = await client.query(
-            'SELECT hospital_id FROM provider_hospitals WHERE provider_id=$1',
-            [provider.rows[0].provider_id]
-        );
-
-        const hospitalIds = providerHospitals.rows.map(r => r.hospital_id);
-
-        if(!hospitalIds.includes(adminHospitalid)){
-            return res.status(403).json({ status: "failed", message: "Access denied" });
-        }
-        }else {
-    
-            if(adminRole === 2 && adminHospitalid !== userExists.rows[0].hospital_id){
-                return res.status(403).json({ status: "failed", message: "Access denied" });
-            }
-        }
-
-        
-        const updatedUser = await client.query(
-            `UPDATE users 
-             SET 
-                first_name = COALESCE($1, first_name),
-                middle_name = COALESCE($2, middle_name),
-                last_name = COALESCE($3, last_name),
-                username = COALESCE($4, username),
-                employee_id = COALESCE($5, employee_id),
-                
-                department = COALESCE($6, department),
-                date_of_birth = COALESCE($7, date_of_birth),
-                gender = COALESCE($8, gender),
-                email = COALESCE($9, email),
-                contact_info = COALESCE($10, contact_info),
-                address_line = COALESCE($11, address_line),
-                role_id = COALESCE($12, role_id),
-                employment_status = COALESCE($13, employment_status),
-                account_status = COALESCE($14, account_status),
-                updated_at = CURRENT_TIMESTAMP
-             WHERE user_id = $15
-             RETURNING *`,
-            [
-                safe(first_name),
-                safe(middle_name),
-                safe(last_name),
-                safe(username),
-                safe(employee_id),
-               
-                safe(department),
-                safe(date_of_birth),
-                safe(gender),
-                safe(email),
-                safe(contact_info),
-                safe(address_line),
-                safe(role_id),
-                safe(employment_status),
-                safe(account_status),
-                user_id
-            ]
-        );
-
-        let user = updatedUser.rows[0];
-        user.password_hash = undefined;
-
-        let provider = null;
-
-        if (user.role_id === 3) {
-            const providerExists = await client.query(
-                'SELECT * FROM healthcare_providers WHERE user_id = $1',
-                [user_id]
-            );
-
-            if (!providerExists.rows[0]) {
-                return res.status(404).json({
-                    status: "failed",
-                    message: "Healthcare provider record not found"
-                });
-            }
-
-            const updatedProvider = await client.query(
-                `UPDATE healthcare_providers
-                 SET 
-                    license_number = COALESCE($1, license_number),
-                    license_expiry = COALESCE($2, license_expiry),
-                    specialization = COALESCE($3, specialization),
-                    updated_at = CURRENT_TIMESTAMP
-                 WHERE user_id = $4
-                 RETURNING provider_id, license_number, license_expiry, specialization`,
-                [
-                    safe(license_number),
-                    safe(license_expiry),
-                    safe(specialization),
-                    user_id
-                ]
-            );
-
-            provider = updatedProvider.rows[0];
-        }
-
-        await client.query("COMMIT");
-
-        
-        res.status(200).json({
-            status: "success",
-            message: "User updated",
-            user,
-            provider
-        });
-
-    } catch (error) {
-        await client.query("ROLLBACK")
-        console.error(error);
-        res.status(500).json({ message: "Server error" });
-    }finally {
-        client.release();
+    if (!user) {
+      return res.status(404).json({ status: "failed", message: "User not found" });
     }
+
+    if (new_password !== confirm_password) {
+      return res.status(401).json({ status: "failed", message: "Passwords do not match" });
+    }
+
+    const isMatch = await comparePassword(current_password, user?.password_hash);
+    if (!isMatch) {
+      return res.status(401).json({ status: "failed", message: "Invalid current password" });
+    }
+
+    const hashed_password = await hashedPassword(new_password);
+
+    await client.query("BEGIN");
+
+    await client.query(
+      "UPDATE users SET password_hash = $1, must_change_password = false WHERE user_id = $2",
+      [hashed_password, user_id]
+    );
+
+    await client.query(
+      `INSERT INTO audit_logs (user_id, action, entity, entity_id, description, timestamp)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [
+        user_id,
+        "USER_PASSWORD_CHANGE",
+        "users",
+        user_id,
+        `User (ID: ${user_id}) changed their own password.`,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      status: "success",
+      message: "Password successfully changed",
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
 };
+
+
+export const adminResetPassword = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { user_id, temp_password } = req.body;
+
+    const userExists = await client.query("SELECT * FROM users WHERE user_id=$1", [user_id]);
+    if (!userExists.rows[0]) {
+      return res.status(404).json({
+        status: "failed",
+        message: "User not found",
+      });
+    }
+
+    const adminRole = req.user.role_id;
+    const adminHospitalid = req.user.hospital_id;
+
+    if (adminRole === 2 && userExists.rows[0].role_id === 3) {
+      const provider = await client.query(
+        "SELECT provider_id FROM healthcare_providers WHERE user_id=$1",
+        [userExists.rows[0].user_id]
+      );
+      if (!provider.rows[0]) {
+        return res.status(404).json({ status: "failed", message: "Provider not found" });
+      }
+
+      const providerHospitals = await client.query(
+        "SELECT hospital_id FROM provider_hospitals WHERE provider_id=$1",
+        [provider.rows[0].provider_id]
+      );
+
+      const hospitalIds = providerHospitals.rows.map((r) => r.hospital_id);
+
+      if (!hospitalIds.includes(adminHospitalid)) {
+        return res.status(403).json({ status: "failed", message: "Access denied" });
+      }
+    } else if (adminRole === 2 && adminHospitalid !== userExists.rows[0].hospital_id) {
+      return res.status(403).json({ status: "failed", message: "Access denied" });
+    }
+
+    const hashed_password = await hashedPassword(temp_password);
+
+    await client.query("BEGIN");
+
+    await client.query(
+      "UPDATE users SET password_hash=$1, must_change_password=true WHERE user_id=$2",
+      [hashed_password, user_id]
+    );
+
+    await client.query(
+      `INSERT INTO audit_logs (user_id, action, entity, entity_id, description, timestamp)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [
+        req.user.user_id,
+        "ADMIN_PASSWORD_RESET",
+        "users",
+        user_id,
+        `Admin (ID: ${req.user.user_id}) reset password for user (ID: ${user_id}). Temporary password issued.`,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      status: "success",
+      message: "Temporary password set. User must change on next login.",
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+};
+
+export const adminUpdateUser = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { user_id } = req.body;
+    const currentUserId = req.user.user_id;
+
+    if (user_id === currentUserId) {
+      return res.status(401).json({
+        status: "Denied",
+        message: "Cannot perform operation on self",
+      });
+    }
+
+    const {
+      first_name,
+      middle_name,
+      last_name,
+      username,
+      employee_id,
+      department,
+      date_of_birth,
+      gender,
+      email,
+      contact_info,
+      address_line,
+      role_id,
+      employment_status,
+      account_status,
+      license_number,
+      license_expiry,
+      specialization,
+    } = req.body;
+
+    await client.query("BEGIN");
+
+    const userExists = await client.query("SELECT * FROM users WHERE user_id = $1", [user_id]);
+    if (!userExists.rows[0]) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        status: "failed",
+        message: "User not found",
+      });
+    }
+
+    const adminRole = req.user.role_id;
+    const adminHospitalid = req.user.hospital_id;
+
+    if (adminRole === 2 && userExists.rows[0].role_id === 3) {
+      const provider = await client.query(
+        "SELECT provider_id FROM healthcare_providers WHERE user_id=$1",
+        [userExists.rows[0].user_id]
+      );
+      if (!provider.rows[0]) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({ status: "failed", message: "Provider not found" });
+      }
+
+      const providerHospitals = await client.query(
+        "SELECT hospital_id FROM provider_hospitals WHERE provider_id=$1",
+        [provider.rows[0].provider_id]
+      );
+
+      const hospitalIds = providerHospitals.rows.map((r) => r.hospital_id);
+
+      if (!hospitalIds.includes(adminHospitalid)) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({ status: "failed", message: "Access denied" });
+      }
+    } else if (adminRole === 2 && adminHospitalid !== userExists.rows[0].hospital_id) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({ status: "failed", message: "Access denied" });
+    }
+
+    const updatedUser = await client.query(
+      `UPDATE users 
+       SET 
+          first_name = COALESCE($1, first_name),
+          middle_name = COALESCE($2, middle_name),
+          last_name = COALESCE($3, last_name),
+          username = COALESCE($4, username),
+          employee_id = COALESCE($5, employee_id),
+          department = COALESCE($6, department),
+          date_of_birth = COALESCE($7, date_of_birth),
+          gender = COALESCE($8, gender),
+          email = COALESCE($9, email),
+          contact_info = COALESCE($10, contact_info),
+          address_line = COALESCE($11, address_line),
+          role_id = COALESCE($12, role_id),
+          employment_status = COALESCE($13, employment_status),
+          account_status = COALESCE($14, account_status),
+          updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $15
+       RETURNING *`,
+      [
+        safe(first_name),
+        safe(middle_name),
+        safe(last_name),
+        safe(username),
+        safe(employee_id),
+        safe(department),
+        safe(date_of_birth),
+        safe(gender),
+        safe(email),
+        safe(contact_info),
+        safe(address_line),
+        safe(role_id),
+        safe(employment_status),
+        safe(account_status),
+        user_id,
+      ]
+    );
+
+    let user = updatedUser.rows[0];
+    user.password_hash = undefined;
+
+    let provider = null;
+
+    if (user.role_id === 3) {
+      const providerExists = await client.query(
+        "SELECT * FROM healthcare_providers WHERE user_id = $1",
+        [user_id]
+      );
+
+      if (!providerExists.rows[0]) {
+        await client.query("ROLLBACK");
+        return res.status(404).json({
+          status: "failed",
+          message: "Healthcare provider record not found",
+        });
+      }
+
+      const updatedProvider = await client.query(
+        `UPDATE healthcare_providers
+         SET 
+            license_number = COALESCE($1, license_number),
+            license_expiry = COALESCE($2, license_expiry),
+            specialization = COALESCE($3, specialization),
+            updated_at = CURRENT_TIMESTAMP
+         WHERE user_id = $4
+         RETURNING provider_id, license_number, license_expiry, specialization`,
+        [safe(license_number), safe(license_expiry), safe(specialization), user_id]
+      );
+
+      provider = updatedProvider.rows[0];
+    }
+
+    await client.query(
+      `INSERT INTO audit_logs (user_id, action, entity, entity_id, description, timestamp)
+       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      [
+        req.user.user_id, 
+        "ADMIN_UPDATE_USER",
+        "users",
+        user_id, 
+        `Admin (ID: ${req.user.user_id}) updated user profile (ID: ${user_id}).`,
+      ]
+    );
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      status: "success",
+      message: "User updated successfully",
+      user,
+      provider,
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+};
+
 
 
 
@@ -777,11 +847,10 @@ export const selfRegister = async (req, res) => {
   email,
   username,
   password,
-  employee_id // ✅ add this
+  employee_id 
 } = req.body;
 
 
-    // ✅ Validate required fields
     if (!first_name || !last_name || !date_of_birth || !email || !username || !password) {
       return res.status(400).json({
         status: "failed",
@@ -804,13 +873,11 @@ export const selfRegister = async (req, res) => {
       return res.status(400).json({ status: "failed", message: "Username already taken" });
     }
 
-    // 🔒 Hash password
+    
     const hashed_password = await hashedPassword(password);
 
-    // 👤 Default role_id = 1 (normal user/patient)
-    const role_id = 1;
 
-    // 📝 Insert new user
+    
     const newUser = await client.query(
   `INSERT INTO users (
       first_name, middle_name, last_name, date_of_birth, gender,
@@ -830,7 +897,7 @@ export const selfRegister = async (req, res) => {
     username,
     hashed_password,
     role_id,
-    employee_id // ✅ include here
+    employee_id 
   ]
 );
 
@@ -856,3 +923,118 @@ export const selfRegister = async (req, res) => {
 
 
 
+
+export const deleteUser = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { user_id } = req.params;
+
+    if (!user_id) {
+      return res.status(400).json({ status: "failed", message: "User ID required" });
+    }
+
+    if (![1, 2].includes(req.user.role_id)) {
+      return res.status(403).json({ status: "failed", message: "Unauthorized" });
+    }
+
+    await client.query("BEGIN");
+  
+    const userResult = await client.query(
+      `SELECT user_id, role_id FROM users WHERE user_id = $1`,
+      [user_id]
+    );
+
+    if (userResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ status: "failed", message: "User not found" });
+    }
+
+    const user = userResult.rows[0];
+
+    if (req.user.role_id === 2) {
+      const allowed = await client.query(
+        `SELECT 1 FROM users WHERE user_id = $1 AND hospital_id = $2`,
+        [user_id, req.user.hospital_id]
+      );
+      if (allowed.rows.length === 0) {
+        await client.query("ROLLBACK");
+        return res.status(403).json({
+          status: "failed",
+          message: "You cannot delete users outside your hospital"
+        });
+      }
+    }
+
+    if (user.role_id === 3 || user.role_id === 4) {
+      const providerResult = await client.query(
+        "SELECT provider_id FROM healthcare_providers WHERE user_id = $1",
+        [user_id]
+      );
+
+      if (providerResult.rows.length > 0) {
+        const provider_id = providerResult.rows[0].provider_id;
+
+       
+        await client.query("DELETE FROM provider_hospitals WHERE provider_id = $1", [provider_id]);
+
+      
+        await logAudit({
+          user_id: req.user.user_id,
+          table_name: "provider_hospitals",
+          action_type: "delete_provider_links",
+          old_values: { provider_id },
+          event_type: "DELETE",
+          ip_address: req.ip,
+          branch_id: req.user.branch_id,
+          hospital_id: req.user.hospital_id,
+          request_method: req.method,
+          endpoint: req.originalUrl
+        });
+
+        await client.query("DELETE FROM healthcare_providers WHERE provider_id = $1", [provider_id]);
+
+        await logAudit({
+          user_id: req.user.user_id,
+          table_name: "healthcare_providers",
+          action_type: "delete_provider",
+          old_values: { provider_id },
+          event_type: "DELETE",
+          ip_address: req.ip,
+          branch_id: req.user.branch_id,
+          hospital_id: req.user.hospital_id,
+          request_method: req.method,
+          endpoint: req.originalUrl
+        });
+      }
+    }
+
+    await client.query("DELETE FROM users WHERE user_id = $1", [user_id]);
+
+    await logAudit({
+      user_id: req.user.user_id,
+      table_name: "users",
+      action_type: "delete_user",
+      old_values: { user_id },
+      event_type: "DELETE",
+      ip_address: req.ip,
+      branch_id: req.user.branch_id,
+      hospital_id: req.user.hospital_id,
+      request_method: req.method,
+      endpoint: req.originalUrl
+    });
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      status: "success",
+      message: "User account deleted successfully"
+    });
+
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Delete user error:", error);
+    res.status(500).json({ status: "failed", message: "Server error" });
+  } finally {
+    client.release();
+  }
+};

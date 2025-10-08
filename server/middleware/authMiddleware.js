@@ -24,7 +24,7 @@ export const authMiddleware = async (req,res,next)=>{
             must_change_password: userToken.must_change_password  
         };
 
-        // Restrict access if must_change_password = true
+        
        if (req.user.must_change_password && !req.originalUrl.endsWith("/change-password")) {
           return res.status(403).json({
             status: "forbidden",

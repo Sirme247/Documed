@@ -1,15 +1,16 @@
 import express from 'express';
 import { registerVisit,recordVitals,recordDiagnosis,
     recordTreatments,recordVisitPrescriptions,
-    RecordLabTests,recordImagingResults,getVisitDetails,getPatientVisits
+    RecordLabTests,recordImagingResults,getVisitDetails,getPatientVisits,deleteVisit
 } from '../controllers/visitController.js';
 
-import {authMiddleware} from '../middleware/authMiddleware.js';
+import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.use(authMiddleware)
 
+router.delete('/delete-visit/:visit_id',authMiddleware, requireRole(1,2),deleteVisit)
 router.get('/:visit_id', authMiddleware, getVisitDetails);
 router.get('/patient/:patient_id',authMiddleware, getPatientVisits);
 router.post('/register-visit',authMiddleware, registerVisit);

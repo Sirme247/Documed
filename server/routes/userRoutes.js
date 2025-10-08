@@ -6,23 +6,24 @@ import {registerUser,
      adminResetPassword,
      adminUpdateUser,
      userUpdateUser,
-    registerExistingMedicalPractitioner} from '../controllers/userController.js';
+    registerExistingMedicalPractitioner,deleteUser} from '../controllers/userController.js';
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 
-// 1 → superadmin  
-// 2 → localadmin  
-// 3 → doctors,e.t.c
-// 4 → nurse  
-// 5 → receptionist 
+// 1 - superadmin  
+// 2 - localadmin  
+// 3 - doctors,e.t.c
+// 4 - nurse  
+// 5 - receptionist 
 
 
 
 
 router.get('/', authMiddleware, getUser);
 
+router.delete('/delete-user/:user_id',authMiddleware, requireRole(1,2), deleteUser);
 router.post('/register-user', authMiddleware, requireRole(1,2),  registerUser);
 router.put("/change-password", authMiddleware, passwordChange);
 router.put('/admin-reset-password',authMiddleware, requireRole(1, 2), adminResetPassword);

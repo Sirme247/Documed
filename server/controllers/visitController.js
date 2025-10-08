@@ -1,4 +1,5 @@
 import {pool} from '../libs/database.js';
+import { logAudit } from "../libs/auditLogger.js";
 
 export const registerVisit = async (req, res)=>{
     try{
@@ -253,7 +254,6 @@ export const getVisitDetails = async (req, res) => {
       });
     }
 
-    // ✅ Get visit info with hospital and branch details (including cities)
     const visitResult = await pool.query(
       `SELECT 
           v.*, 
@@ -278,7 +278,6 @@ export const getVisitDetails = async (req, res) => {
       });
     }
 
-    // ✅ Fetch related records concurrently
     const [
       vitalsResult,
       diagnosesResult,
@@ -295,7 +294,6 @@ export const getVisitDetails = async (req, res) => {
       pool.query("SELECT * FROM imaging_results WHERE visit_id = $1", [visit_id]),
     ]);
 
-    // ✅ Combine everything
     const visitData = {
       ...visitResult.rows[0],
       vitals: vitalsResult.rows,
@@ -329,7 +327,6 @@ export const getPatientVisits = async (req, res) => {
       });
     }
 
-    // ✅ Fetch all visits for a specific patient (with hospital + branch details)
     const visitsResult = await pool.query(
       `SELECT 
           v.visit_id,
@@ -372,5 +369,113 @@ export const getPatientVisits = async (req, res) => {
       status: "error",
       message: "Server error",
     });
+  }
+};
+
+
+
+
+export const deleteVisit = async (req, res) => {
+  const client = await pool.connect();
+
+  try {
+    const { visit_id } = req.params;
+
+    if (!visit_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Visit ID is required",
+      });
+    }
+
+    // 
+    // if (![1, 2, 3].includes(req.user.role_id)) {
+    //   return res.status(403).json({
+    //     status: "failed",
+    //     message: "You are not authorized to delete visits",
+    //   });
+    // }
+
+    await client.query("BEGIN");
+
+    const visitResult = await client.query(
+      `SELECT * FROM visits WHERE visit_id = $1`,
+      [visit_id]
+    );
+
+    if (visitResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        status: "failed",
+        message: "Visit not found",
+      });
+    }
+
+    const visit = visitResult.rows[0];
+
+    if (req.user.role_id === 2 && visit.hospital_id !== req.user.hospital_id) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        status: "failed",
+        message: "You can only delete visits from your hospital",
+      });
+    }
+
+    const tables = [
+      "vitals",
+      "diagnoses",
+      "treatments",
+      "visit_prescriptions",
+      "lab_tests",
+      "imaging_results",
+    ];
+
+    for (const table of tables) {
+      await client.query(`DELETE FROM ${table} WHERE visit_id = $1`, [visit_id]);
+
+      await logAudit({
+        user_id: req.user.user_id,
+        table_name: table,
+        action_type: "delete_related_records",
+        old_values: { visit_id },
+        event_type: "DELETE",
+        ip_address: req.ip,
+        branch_id: req.user.branch_id,
+        hospital_id: req.user.hospital_id,
+        request_method: req.method,
+        endpoint: req.originalUrl,
+      });
+    }
+
+    await client.query(`DELETE FROM visits WHERE visit_id = $1`, [visit_id]);
+
+    await logAudit({
+      user_id: req.user.user_id,
+      table_name: "visits",
+      action_type: "delete_visit",
+      old_values: visit,
+      event_type: "DELETE",
+      ip_address: req.ip,
+      branch_id: req.user.branch_id,
+      hospital_id: req.user.hospital_id,
+      request_method: req.method,
+      endpoint: req.originalUrl,
+    });
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      status: "success",
+      message: "Visit and all related records deleted successfully",
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Error deleting visit:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Server error",
+    });
+  } finally {
+    client.release();
   }
 };
