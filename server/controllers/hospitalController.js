@@ -435,112 +435,6 @@ export const updateHospitalBranch = async (req, res) => {
 
 
 
-export const getHospitalInformation = async (req, res) => {
-  try {
-    const { hospital_id } = req.params; 
-
-    if (hospital_id) {
-      
-      const hospital = await pool.query(
-        'SELECT * FROM hospitals WHERE hospital_id = $1',
-        [hospital_id]
-      );
-
-      if (hospital.rows.length === 0) {
-        return res.status(404).json({
-          status: 'failed',
-          message: 'Hospital not found',
-        });
-      }
-
-      return res.status(200).json({
-        status: 'success',
-        message: 'Hospital retrieved successfully',
-        data: hospital.rows[0],
-      });
-    }
-
-  
-    const allHospitals = await pool.query('SELECT * FROM hospitals ORDER BY hospital_name ASC');
-
-    res.status(200).json({
-      status: 'success',
-      message: 'Hospitals retrieved successfully',
-      total: allHospitals.rowCount,
-      data: allHospitals.rows,
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
-
-
-
-
-export const getBranchInformation = async (req, res) => {
-  try {
-    const { hospital_id, branch_id } = req.params;
-
-    
-    if (hospital_id && branch_id) {
-      const branch = await pool.query(
-        `SELECT * FROM branches 
-         WHERE branch_id = $1 AND hospital_id = $2`,
-        [branch_id, hospital_id]
-      );
-
-      if (branch.rows.length === 0) {
-        return res.status(404).json({
-          status: 'failed',
-          message: 'Branch not found for this hospital',
-        });
-      }
-
-      return res.status(200).json({
-        status: 'success',
-        message: 'Branch retrieved successfully',
-        data: branch.rows[0],
-      });
-    }
-
-    
-    if (hospital_id) {
-      const branches = await pool.query(
-        `SELECT * FROM branches 
-         WHERE hospital_id = $1
-         ORDER BY branch_name ASC`,
-        [hospital_id]
-      );
-
-      return res.status(200).json({
-        status: 'success',
-        message: 'Branches retrieved successfully',
-        total: branches.rowCount,
-        data: branches.rows,
-      });
-    }
-
-    
-    const allBranches = await pool.query(
-      `SELECT b.*, h.hospital_name 
-       FROM branches b
-       JOIN hospitals h ON h.hospital_id = b.hospital_id
-       ORDER BY h.hospital_name, b.branch_name`
-    );
-
-    res.status(200).json({
-      status: 'success',
-      message: 'All branches retrieved successfully',
-      total: allBranches.rowCount,
-      data: allBranches.rows,
-    });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Server error' });
-  }
-};
 
 export const deactivateHospital = async (req, res) => {
   const client = await pool.connect();
@@ -780,6 +674,526 @@ export const hardDeleteBranch = async (req, res) => {
     await client.query("ROLLBACK");
     console.error(error);
     res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+};
+
+
+
+export const getAllHospitals = async (req, res) => {
+  try {
+    const {
+      search,
+      hospital_type,
+      city,
+      state,
+      country,
+      accredition_status,
+      is_active,
+      page = 1,
+      limit = 50,
+      sort_by = 'hospital_name',
+      sort_order = 'ASC'
+    } = req.query;
+
+    const user_id = req.user?.user_id || null;
+    const offset = (page - 1) * limit;
+
+    const conditions = [];
+    const params = [];
+    let paramCount = 1;
+
+    if (search) {
+      conditions.push(`(
+        h.hospital_name ILIKE $${paramCount} OR 
+        h.hospital_license_number ILIKE $${paramCount} OR 
+        h.email ILIKE $${paramCount} OR
+        h.contact_number ILIKE $${paramCount} OR
+        h.city ILIKE $${paramCount}
+      )`);
+      params.push(`%${search}%`);
+      paramCount++;
+    }
+
+    if (hospital_type) {
+      conditions.push(`h.hospital_type = $${paramCount}`);
+      params.push(hospital_type);
+      paramCount++;
+    }
+
+    if (city) {
+      conditions.push(`h.city ILIKE $${paramCount}`);
+      params.push(`%${city}%`);
+      paramCount++;
+    }
+
+    if (state) {
+      conditions.push(`h.state ILIKE $${paramCount}`);
+      params.push(`%${state}%`);
+      paramCount++;
+    }
+
+    if (country) {
+      conditions.push(`h.country ILIKE $${paramCount}`);
+      params.push(`%${country}%`);
+      paramCount++;
+    }
+
+    if (accredition_status) {
+      conditions.push(`h.accredition_status = $${paramCount}`);
+      params.push(accredition_status);
+      paramCount++;
+    }
+
+    if (is_active !== undefined) {
+      conditions.push(`h.is_active = $${paramCount}`);
+      params.push(is_active === 'true');
+      paramCount++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const validSortFields = ['hospital_name', 'created_at', 'updated_at', 'city', 'hospital_type'];
+    const sortField = validSortFields.includes(sort_by) ? sort_by : 'hospital_name';
+    const sortDirection = sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM hospitals h
+      ${whereClause}
+    `;
+    const countResult = await pool.query(countQuery, params);
+    const totalHospitals = parseInt(countResult.rows[0].total);
+
+    const query = `
+      SELECT 
+        h.*,
+        COUNT(b.branch_id) as branch_count
+      FROM hospitals h
+      LEFT JOIN branches b ON h.hospital_id = b.hospital_id AND b.is_active = true
+      ${whereClause}
+      GROUP BY h.hospital_id
+      ORDER BY h.${sortField} ${sortDirection}
+      LIMIT $${paramCount} OFFSET $${paramCount + 1}
+    `;
+
+    params.push(limit, offset);
+    const result = await pool.query(query, params);
+
+    // Log audit
+    // await logAudit({
+    //   user_id,
+    //   table_name: "hospitals",
+    //   action_type: "SELECT",
+    //   event_type: "List Hospitals",
+    //   request_method: req.method,
+    //   endpoint: req.originalUrl,
+    //   ip_address: req.ip
+    // });
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        hospitals: result.rows,
+        pagination: {
+          total: totalHospitals,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total_pages: Math.ceil(totalHospitals / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ 
+      status: "failed",
+      message: "Server error" 
+    });
+  }
+};
+
+export const getHospitalById = async (req, res) => {
+  try {
+    const { hospital_id } = req.params;
+    const user_id = req.user?.user_id || null;
+
+    if (!hospital_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Hospital ID is required"
+      });
+    }
+
+    const hospitalQuery = `
+      SELECT * FROM hospitals 
+      WHERE hospital_id = $1
+    `;
+    const hospitalResult = await pool.query(hospitalQuery, [hospital_id]);
+
+    if (hospitalResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Hospital not found"
+      });
+    }
+
+    const hospital = hospitalResult.rows[0];
+
+    const branchesQuery = `
+      SELECT * FROM branches 
+      WHERE hospital_id = $1 
+      ORDER BY branch_name ASC
+    `;
+    const branches = await pool.query(branchesQuery, [hospital_id]);
+
+    const statsQuery = `
+      SELECT 
+        COUNT(DISTINCT u.user_id) as total_users,
+        COUNT(DISTINCT p.patient_id) as total_patients,
+        COUNT(DISTINCT v.visit_id) as total_visits
+      FROM hospitals h
+      
+
+      LEFT JOIN users u ON h.hospital_id = u.hospital_id
+
+      LEFT JOIN patient_identifiers pi ON h.hospital_id = pi.hospital_id
+      LEFT JOIN patients p ON pi.patient_id = p.patient_id
+      LEFT JOIN visits v ON h.hospital_id = v.hospital_id
+      WHERE h.hospital_id = $1
+    `;
+    const stats = await pool.query(statsQuery, [hospital_id]);
+
+    // Log audit
+    // await logAudit({
+    //   user_id,
+    //   hospital_id,
+    //   table_name: "hospitals",
+    //   action_type: "SELECT",
+    //   event_type: "View Hospital Details",
+    //   request_method: req.method,
+    //   endpoint: req.originalUrl,
+    //   ip_address: req.ip
+    // });
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        hospital,
+        branches: branches.rows,
+        statistics: stats.rows[0]
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ 
+      status: "failed",
+      message: "Server error" 
+    });
+  }
+};
+
+export const getAllBranches = async (req, res) => {
+  try {
+    const {
+      search,
+      hospital_id,
+      branch_type,
+      city,
+      state,
+      country,
+      accredition_status,
+      is_active,
+      page = 1,
+      limit = 50,
+      sort_by = 'branch_name',
+      sort_order = 'ASC'
+    } = req.query;
+
+    const user_id = req.user?.user_id || null;
+    const offset = (page - 1) * limit;
+
+    const conditions = [];
+    const params = [];
+    let paramCount = 1;
+
+    if (search) {
+      conditions.push(`(
+        b.branch_name ILIKE $${paramCount} OR 
+        b.branch_license_number ILIKE $${paramCount} OR 
+        b.email ILIKE $${paramCount} OR
+        b.contact_number ILIKE $${paramCount} OR
+        b.city ILIKE $${paramCount} OR
+        h.hospital_name ILIKE $${paramCount}
+      )`);
+      params.push(`%${search}%`);
+      paramCount++;
+    }
+
+    if (hospital_id) {
+      conditions.push(`b.hospital_id = $${paramCount}`);
+      params.push(hospital_id);
+      paramCount++;
+    }
+
+    if (branch_type) {
+      conditions.push(`b.branch_type = $${paramCount}`);
+      params.push(branch_type);
+      paramCount++;
+    }
+
+    if (city) {
+      conditions.push(`b.city ILIKE $${paramCount}`);
+      params.push(`%${city}%`);
+      paramCount++;
+    }
+
+    if (state) {
+      conditions.push(`b.state ILIKE $${paramCount}`);
+      params.push(`%${state}%`);
+      paramCount++;
+    }
+
+    if (country) {
+      conditions.push(`b.country ILIKE $${paramCount}`);
+      params.push(`%${country}%`);
+      paramCount++;
+    }
+
+    if (accredition_status) {
+      conditions.push(`b.accredition_status = $${paramCount}`);
+      params.push(accredition_status);
+      paramCount++;
+    }
+
+    if (is_active !== undefined) {
+      conditions.push(`b.is_active = $${paramCount}`);
+      params.push(is_active === 'true');
+      paramCount++;
+    }
+
+    const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+    const validSortFields = ['branch_name', 'created_at', 'updated_at', 'city', 'branch_type'];
+    const sortField = validSortFields.includes(sort_by) ? sort_by : 'branch_name';
+    const sortDirection = sort_order.toUpperCase() === 'DESC' ? 'DESC' : 'ASC';
+
+    const countQuery = `
+      SELECT COUNT(*) as total
+      FROM branches b
+      LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id
+      ${whereClause}
+    `;
+    const countResult = await pool.query(countQuery, params);
+    const totalBranches = parseInt(countResult.rows[0].total);
+
+    const query = `
+      SELECT 
+        b.*,
+        h.hospital_name,
+        h.hospital_type
+      FROM branches b
+      LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id
+      ${whereClause}
+      ORDER BY b.${sortField} ${sortDirection}
+      LIMIT $${paramCount} OFFSET $${paramCount + 1}
+    `;
+
+    params.push(limit, offset);
+    const result = await pool.query(query, params);
+
+    // Log audit
+    // await logAudit({
+    //   user_id,
+    //   table_name: "branches",
+    //   action_type: "SELECT",
+    //   event_type: "List Branches",
+    //   request_method: req.method,
+    //   endpoint: req.originalUrl,
+    //   ip_address: req.ip
+    // });
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        branches: result.rows,
+        pagination: {
+          total: totalBranches,
+          page: parseInt(page),
+          limit: parseInt(limit),
+          total_pages: Math.ceil(totalBranches / limit)
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ 
+      status: "failed",
+      message: "Server error" 
+    });
+  }
+};
+
+export const getBranchById = async (req, res) => {
+  try {
+    const { branch_id } = req.params;
+    const user_id = req.user?.user_id || null;
+
+    if (!branch_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Branch ID is required"
+      });
+    }
+
+    const branchQuery = `
+      SELECT 
+        b.*,
+        h.hospital_name,
+        h.hospital_type,
+        h.hospital_license_number as parent_hospital_license
+      FROM branches b
+      LEFT JOIN hospitals h ON b.hospital_id = h.hospital_id
+      WHERE b.branch_id = $1
+    `;
+    const branchResult = await pool.query(branchQuery, [branch_id]);
+
+    if (branchResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Branch not found"
+      });
+    }
+
+    const branch = branchResult.rows[0];
+
+    const statsQuery = `
+      SELECT 
+        COUNT(DISTINCT u.user_id) as total_users,
+        COUNT(DISTINCT v.visit_id) as total_visits
+      FROM branches b
+      LEFT JOIN users u ON b.branch_id = u.branch_id 
+      LEFT JOIN visits v ON b.branch_id = v.branch_id
+      WHERE b.branch_id = $1
+    `;
+    const stats = await pool.query(statsQuery, [branch_id]);
+
+    // Log audit
+    // await logAudit({
+    //   user_id,
+    //   branch_id,
+    //   hospital_id: branch.hospital_id,
+    //   table_name: "branches",
+    //   action_type: "SELECT",
+    //   event_type: "View Branch Details",
+    //   request_method: req.method,
+    //   endpoint: req.originalUrl,
+    //   ip_address: req.ip
+    // });
+
+    res.status(200).json({
+      status: "success",
+      data: {
+        branch,
+        statistics: stats.rows[0]
+      }
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ 
+      status: "failed",
+      message: "Server error" 
+    });
+  }
+};
+
+export const getBranchesByHospital = async (req, res) => {
+  try{
+
+    // const user_id = req.user.user_id || null;
+    const hospital_id = req.user.hospital_id || null;
+    
+
+    // if(user_id===3){
+    //   const hospital = await pool.query('SELECT hospital_id FROM users WHERE user_id = $1', [user_id]);
+
+    // }
+
+    if(!hospital_id){
+      return res.status(400).json({
+        status: "failed",
+        message: "Hospital ID is required"
+      });
+    }
+    const branches = await pool.query('SELECT * FROM branches WHERE hospital_id = $1 AND is_active = true ORDER BY branch_name ASC', [hospital_id]);
+
+
+    res.status(200).json({
+      status: "success",
+      data: branches.rows
+    });
+
+    
+  }catch(error){
+    console.log(error);
+    res.status(500).json({message: "Server error"});    
+  }
+}
+
+export const currentHospitalDetails = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const hospital_id = req.user.hospital_id || null;
+
+    if (!hospital_id) {
+      client.release(); 
+      return res.status(400).json({
+        status: "failed",
+        message: "Hospital ID is required"
+      });
+    }
+
+    await client.query('BEGIN');
+
+    const hospital = await client.query(
+      'SELECT * FROM hospitals WHERE hospital_id = $1',
+      [hospital_id]
+    );
+
+    if (hospital.rows.length === 0) {
+      await client.query('ROLLBACK');
+      client.release();
+      return res.status(404).json({
+        status: "failed",
+        message: "Hospital not found"
+      });
+    }
+
+    const branches = await client.query(
+      'SELECT * FROM branches WHERE hospital_id = $1 AND is_active = true ORDER BY branch_name ASC',
+      [hospital_id]
+    );
+
+    await client.query('COMMIT');
+
+    res.status(200).json({
+      status: "success",
+      data: hospital.rows[0],
+      branches: branches.rows
+    });
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error("Error fetching hospital details:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error",
+      error: error.message
+    });
   } finally {
     client.release();
   }

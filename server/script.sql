@@ -91,6 +91,10 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
+
+
+
 CREATE TABLE healthcare_providers (
     user_id INT UNIQUE NOT NULL REFERENCES users(user_id),
     provider_id SERIAL PRIMARY KEY,
@@ -158,22 +162,24 @@ CREATE TABLE patient_identifiers (
     UNIQUE (patient_id, hospital_id)
 );
 
-
+CREATE TYPE admission_status_enum AS ENUM ('admitted','under observation','discharged','transferred');
+CREATE TYPE priority_level_enum AS ENUM ('low', 'normal', 'high', 'critical');
 
 CREATE TABLE visits (
     visit_id SERIAL PRIMARY KEY,
     visit_number VARCHAR(100) UNIQUE NOT NULL,
     visit_type VARCHAR(50) NOT NULL, -- Outpatient, Inpatient, Emergency
     patient_id INT REFERENCES patients(patient_id),
+    user_id INT REFERENCES users(user_id),
     provider_id INT REFERENCES healthcare_providers(provider_id),
     hospital_id INT REFERENCES hospitals(hospital_id),
     branch_id INT REFERENCES branches(branch_id),
     visit_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    priority_level VARCHAR(50) DEFAULT 'normal',
+    priority_level priority_level_enum DEFAULT 'normal',
     referring_provider_name VARCHAR(100),
     referring_provider_hospital VARCHAR(100),
     reason_for_visit TEXT,
-    admission_status VARCHAR(50), -- Admitted, Discharged, Transferred
+    admission_status admission_status_enum, -- Admitted, Discharged, Transferred
     discharge_date TIMESTAMP,
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -257,7 +263,7 @@ CREATE TABLE lab_tests (
     findings TEXT,
     recommendations TEXT, 
     lab_notes TEXT,
-    test_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE imaging_results (
@@ -269,7 +275,7 @@ CREATE TABLE imaging_results (
     findings TEXT,
     reccomendations TEXT, 
     -- notes TEXT, 
-    test_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE allergies (
@@ -414,6 +420,13 @@ CREATE TABLE ai_summaries (
     -- review_status VARCHAR(20) DEFAULT 'Pending', -- Pending, Approved, Modified, Rejected
     -- is_current BOOLEAN DEFAULT TRUE
 );
+
+
+CREATE INDEX IF NOT EXISTS idx_password_reset_token ON users(password_reset_token);
+CREATE INDEX IF NOT EXISTS idx_password_reset_expires ON users(password_reset_expires);
+
+
+
 
 CREATE INDEX idx_patient_mrn ON patient_identifiers(patient_mrn);
 CREATE INDEX idx_patient_name ON patients(last_name, first_name);

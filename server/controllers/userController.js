@@ -1,10 +1,14 @@
 import bcrypt from 'bcrypt';    
+import crypto from 'crypto';
+import nodemailer from 'nodemailer'
+
 
 import { logAudit } from "../libs/auditLogger.js";
 import {pool} from '../libs/database.js';
 import { hashedPassword, createJWT, comparePassword } from '../libs/index.js';
 
 const safe = (val) => (val !== undefined ? val : null);
+
 
 export const getUser = async (req, res) => {
   try {
@@ -153,6 +157,211 @@ export const getUser = async (req, res) => {
   }
 };
 
+export const getAllUsers = async (req, res) => {
+  try {
+    const {
+      search = '',
+      role_id,
+      hospital_id,
+      branch_id,
+      employment_status,
+      account_status,
+      page = 1,
+      limit = 50,
+      sort_by = 'created_at',
+      sort_order = 'DESC'
+    } = req.query;
+
+    // Validate sort parameters to prevent SQL injection
+    const validSortColumns = [
+      'user_id', 'first_name', 'last_name', 'username', 
+      'email', 'employee_id', 'created_at', 'updated_at',
+      'employment_status', 'account_status'
+    ];
+    const validSortOrders = ['ASC', 'DESC'];
+
+    const sortColumn = validSortColumns.includes(sort_by) ? sort_by : 'created_at';
+    const sortOrder = validSortOrders.includes(sort_order.toUpperCase()) 
+      ? sort_order.toUpperCase() 
+      : 'DESC';
+
+    // Build WHERE conditions
+    const conditions = [];
+    const params = [];
+    let paramCount = 1;
+
+    // Restrict hospital admins to their own hospital
+    // Updated to include providers via provider_hospitals
+    if (req.user.role_id === 2) {
+      conditions.push(`(
+        u.hospital_id = $${paramCount} OR
+        ph.hospital_id = $${paramCount}
+      )`);
+      params.push(req.user.hospital_id);
+      paramCount++;
+    }
+
+    // Search across multiple fields using ILIKE for case-insensitive search
+    if (search.trim()) {
+      conditions.push(`(
+        u.first_name ILIKE $${paramCount} OR
+        u.last_name ILIKE $${paramCount} OR
+        u.username ILIKE $${paramCount} OR
+        u.email ILIKE $${paramCount} OR
+        u.employee_id ILIKE $${paramCount} OR
+        CONCAT(u.first_name, ' ', u.last_name) ILIKE $${paramCount}
+      )`);
+      params.push(`%${search.trim()}%`);
+      paramCount++;
+    }
+
+    // Filter by role
+    if (role_id) {
+      conditions.push(`u.role_id = $${paramCount}`);
+      params.push(parseInt(role_id));
+      paramCount++;
+    }
+
+    // Filter by hospital (for super admins)
+    // Updated to include providers via provider_hospitals
+    if (hospital_id && req.user.role_id === 1) {
+      conditions.push(`(
+        u.hospital_id = $${paramCount} OR
+        ph.hospital_id = $${paramCount}
+      )`);
+      params.push(parseInt(hospital_id));
+      paramCount++;
+    }
+
+    // Filter by branch
+    // Updated to include providers via provider_hospitals
+    if (branch_id) {
+      conditions.push(`(
+        u.branch_id = $${paramCount} OR
+        ph.branch_id = $${paramCount}
+      )`);
+      params.push(parseInt(branch_id));
+      paramCount++;
+    }
+
+    // Filter by employment status
+    if (employment_status) {
+      conditions.push(`u.employment_status = $${paramCount}`);
+      params.push(employment_status);
+      paramCount++;
+    }
+
+    // Filter by account status
+    if (account_status) {
+      conditions.push(`u.account_status = $${paramCount}`);
+      params.push(account_status);
+      paramCount++;
+    }
+
+    const whereClause = conditions.length > 0 
+      ? `WHERE ${conditions.join(' AND ')}` 
+      : '';
+
+    // Calculate offset for pagination
+    const offset = (parseInt(page) - 1) * parseInt(limit);
+
+    // Get total count for pagination
+    // Updated to include LEFT JOIN with provider_hospitals
+    const countQuery = `
+      SELECT COUNT(DISTINCT u.user_id) as total
+      FROM users u
+      LEFT JOIN healthcare_providers hp ON u.user_id = hp.user_id
+      LEFT JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
+      ${whereClause}
+    `;
+    
+    const countResult = await pool.query(countQuery, params);
+    const totalUsers = parseInt(countResult.rows[0].total);
+
+    // Main query with joins for related data
+    // Updated to properly handle provider hospital associations
+    const query = `
+  SELECT * FROM (
+    SELECT DISTINCT ON (u.user_id)
+      u.user_id,
+      u.first_name,
+      u.middle_name,
+      u.last_name,
+      u.username,
+      u.employee_id,
+      u.date_of_birth,
+      u.gender,
+      u.email,
+      u.contact_info,
+      u.address_line,
+      u.role_id,
+      r.role_name,
+      COALESCE(u.hospital_id, ph.hospital_id) as hospital_id,
+      COALESCE(h.hospital_name, h2.hospital_name) as hospital_name,
+      COALESCE(u.branch_id, ph.branch_id) as branch_id,
+      COALESCE(b.branch_name, b2.branch_name) as branch_name,
+      u.department,
+      u.employment_status,
+      u.account_status,
+      u.last_login,
+      u.must_change_password,
+      u.created_at,
+      u.updated_at,
+      CASE 
+        WHEN hp.provider_id IS NOT NULL THEN true 
+        ELSE false 
+      END as is_provider,
+      hp.license_number,
+      hp.specialization,
+      ph.is_primary,
+      ph.start_date as provider_start_date,
+      ph.end_date as provider_end_date
+    FROM users u
+    LEFT JOIN roles r ON u.role_id = r.role_id
+    LEFT JOIN hospitals h ON u.hospital_id = h.hospital_id
+    LEFT JOIN branches b ON u.branch_id = b.branch_id
+    LEFT JOIN healthcare_providers hp ON u.user_id = hp.user_id
+    LEFT JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
+    LEFT JOIN hospitals h2 ON ph.hospital_id = h2.hospital_id
+    LEFT JOIN branches b2 ON ph.branch_id = b2.branch_id
+    ${whereClause}
+    ORDER BY u.user_id, ph.is_primary DESC NULLS LAST
+  ) AS distinct_users
+  ORDER BY ${sortColumn} ${sortOrder}
+  LIMIT $${paramCount} OFFSET $${paramCount + 1}
+`;
+
+    params.push(parseInt(limit), offset);
+
+    const result = await pool.query(query, params);
+
+    // Calculate pagination metadata
+    const totalPages = Math.ceil(totalUsers / parseInt(limit));
+
+    res.status(200).json({
+      status: "success",
+      message: "Users fetched successfully",
+      data: {
+        users: result.rows,
+        pagination: {
+          current_page: parseInt(page),
+          total_pages: totalPages,
+          total_users: totalUsers,
+          limit: parseInt(limit),
+          has_next: parseInt(page) < totalPages,
+          has_prev: parseInt(page) > 1
+        }
+      }
+    });
+
+  } catch (error) {
+    console.error("getAllUsers error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error while fetching users"
+    });
+  }
+};
 
 
 export const registerUser = async (req, res) => {
@@ -357,6 +566,131 @@ export const registerUser = async (req, res) => {
   }
 };
 
+// Check if practitioner exists
+export const checkExistingPractitioner = async (req, res) => {
+  try {
+    const { license_number, email } = req.query;
+
+    if (!license_number && !email) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Please provide license_number or email"
+      });
+    }
+
+    const query = `
+      SELECT 
+        u.user_id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.role_id,
+        hp.license_number,
+        hp.specialization,
+        json_agg(
+          json_build_object(
+            'hospital_id', h.hospital_id,
+            'hospital_name', h.hospital_name,
+            'branch_id', ph.branch_id,
+            'branch_name', b.branch_name,
+            'is_primary', ph.is_primary
+          )
+        ) as current_hospitals
+      FROM users u
+      JOIN healthcare_providers hp ON u.user_id = hp.user_id
+      LEFT JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
+      LEFT JOIN hospitals h ON ph.hospital_id = h.hospital_id
+      LEFT JOIN branches b ON ph.branch_id = b.branch_id
+      WHERE hp.license_number = $1 OR u.email = $2
+      GROUP BY u.user_id, hp.license_number, hp.specialization
+    `;
+
+    const result = await pool.query(query, [license_number, email]);
+
+    if (result.rows.length > 0) {
+      return res.status(200).json({
+        status: "success",
+        exists: true,
+        doctor: result.rows[0]
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      exists: false
+    });
+
+  } catch (error) {
+    console.error("Check existing practitioner error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error"
+    });
+  }
+};
+
+// Search doctor
+export const searchDoctor = async (req, res) => {
+  try {
+    const { user_id, license_number } = req.query;
+
+    if (!user_id && !license_number) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Please provide user_id or license_number"
+      });
+    }
+
+    const query = `
+      SELECT 
+        u.user_id,
+        u.first_name,
+        u.last_name,
+        u.email,
+        u.role_id,
+        hp.license_number,
+        hp.specialization,
+        json_agg(
+          json_build_object(
+            'hospital_id', h.hospital_id,
+            'hospital_name', h.hospital_name,
+            'branch_id', ph.branch_id,
+            'branch_name', b.branch_name,
+            'is_primary', ph.is_primary
+          )
+        ) FILTER (WHERE h.hospital_id IS NOT NULL) as current_hospitals
+      FROM users u
+      JOIN healthcare_providers hp ON u.user_id = hp.user_id
+      LEFT JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
+      LEFT JOIN hospitals h ON ph.hospital_id = h.hospital_id
+      LEFT JOIN branches b ON ph.branch_id = b.branch_id
+      WHERE u.user_id = $1 OR hp.license_number = $2
+      GROUP BY u.user_id, hp.license_number, hp.specialization
+    `;
+
+    const result = await pool.query(query, [user_id || null, license_number || null]);
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Doctor not found"
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      doctor: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error("Search doctor error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error"
+    });
+  }
+};
+
 export const registerExistingMedicalPractitioner = async (req, res) => {
   const client = await pool.connect();
   try {
@@ -483,16 +817,19 @@ export const passwordChange = async (req, res) => {
     );
 
     await client.query(
-      `INSERT INTO audit_logs (user_id, action, entity, entity_id, description, timestamp)
-       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      `INSERT INTO audit_logs (
+          user_id,event_type, action_type, table_name,  timestamp
+        )
+        VALUES ($1, $2, $3, $4, NOW())`,
       [
         user_id,
+        "CHANGE PASSWORD",
         "USER_PASSWORD_CHANGE",
         "users",
-        user_id,
-        `User (ID: ${user_id}) changed their own password.`,
+        
       ]
-    );
+      );
+
 
     await client.query("COMMIT");
 
@@ -1038,3 +1375,269 @@ export const deleteUser = async (req, res) => {
     client.release();
   }
 };
+
+
+export const getUserDetails = async (req, res) => {
+  try {
+    const { user_id } = req.params;
+
+    if (!user_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "User ID is required"
+      });
+    }
+
+    // Authorization check - Admin can view all, Local Admin can view their hospital users
+    if (req.user.role_id === 2) {
+      const userHospitalCheck = await pool.query(
+        `SELECT u.user_id, u.hospital_id, u.role_id
+         FROM users u
+         WHERE u.user_id = $1`,
+        [user_id]
+      );
+
+      if (userHospitalCheck.rows.length === 0) {
+        return res.status(404).json({
+          status: "failed",
+          message: "User not found"
+        });
+      }
+
+      const targetUser = userHospitalCheck.rows[0];
+
+      // If target is a doctor, check if they're linked to admin's hospital
+      if (targetUser.role_id === 3) {
+        const providerCheck = await pool.query(
+          `SELECT ph.hospital_id
+           FROM healthcare_providers hp
+           JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
+           WHERE hp.user_id = $1 AND ph.hospital_id = $2`,
+          [user_id, req.user.hospital_id]
+        );
+
+        if (providerCheck.rows.length === 0) {
+          return res.status(403).json({
+            status: "failed",
+            message: "Access denied"
+          });
+        }
+      } else if (targetUser.hospital_id !== req.user.hospital_id) {
+        return res.status(403).json({
+          status: "failed",
+          message: "Access denied"
+        });
+      }
+    }
+
+    // Fetch comprehensive user details
+    const result = await pool.query(
+      `SELECT 
+         u.user_id,
+         u.first_name,
+         u.middle_name,
+         u.last_name,
+         u.username,
+         u.date_of_birth,
+         u.gender,
+         u.email,
+         u.contact_info,
+         u.address_line,
+         u.role_id,
+         r.role_name,
+         u.hospital_id,
+         h.hospital_name,
+         h.hospital_type,
+         h.city AS hospital_city,
+         h.state AS hospital_state,
+         h.country AS hospital_country,
+         h.email AS hospital_email,
+         h.contact_number AS hospital_phone,
+         u.branch_id,
+         b.branch_name,
+         b.branch_type,
+         b.city AS branch_city,
+         b.state AS branch_state,
+         b.country AS branch_country,
+         b.email AS branch_email,
+         b.contact_number AS branch_phone,
+         u.employee_id,
+         u.department,
+         u.employment_status,
+         u.account_status,
+         u.last_login,
+         u.must_change_password,
+         u.created_at,
+         u.updated_at
+       FROM users u
+       LEFT JOIN roles r ON u.role_id = r.role_id
+       LEFT JOIN hospitals h ON u.hospital_id = h.hospital_id
+       LEFT JOIN branches b ON u.branch_id = b.branch_id
+       WHERE u.user_id = $1`,
+      [user_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "User not found"
+      });
+    }
+
+    const user = result.rows[0];
+    let provider = null;
+    let statistics = null;
+
+    // If user is a healthcare provider (Doctor or Nurse)
+    if (user.role_id === 3 || user.role_id === 4) {
+      const providerRes = await pool.query(
+        `SELECT 
+           hp.provider_id,
+           hp.license_number,
+           hp.license_expiry,
+           hp.specialization,
+           hp.created_at AS provider_created_at,
+           hp.updated_at AS provider_updated_at
+         FROM healthcare_providers hp
+         WHERE hp.user_id = $1`,
+        [user_id]
+      );
+
+      if (providerRes.rows.length > 0) {
+        provider = providerRes.rows[0];
+
+        // Get all hospitals/branches this provider is linked to
+        const providerHospitalsRes = await pool.query(
+          `SELECT 
+             ph.provider_hospital_id,
+             ph.hospital_id,
+             h.hospital_name,
+             h.hospital_type,
+             h.city AS hospital_city,
+             h.state AS hospital_state,
+             h.country AS hospital_country,
+             ph.branch_id,
+             b.branch_name,
+             b.branch_type,
+             b.city AS branch_city,
+             b.state AS branch_state,
+             b.country AS branch_country,
+             ph.start_date,
+             ph.end_date,
+             ph.is_primary
+           FROM provider_hospitals ph
+           LEFT JOIN hospitals h ON ph.hospital_id = h.hospital_id
+           LEFT JOIN branches b ON ph.branch_id = b.branch_id
+           WHERE ph.provider_id = $1
+           ORDER BY ph.is_primary DESC, ph.start_date DESC`,
+          [provider.provider_id]
+        );
+
+        provider.hospitals = providerHospitalsRes.rows.filter(row => row.hospital_id);
+        provider.branches = providerHospitalsRes.rows.filter(row => row.branch_id);
+
+        // Get provider statistics
+        const statsRes = await pool.query(
+          `SELECT 
+             COUNT(DISTINCT v.visit_id) as total_visits,
+             COUNT(DISTINCT v.patient_id) as total_patients,
+             COUNT(DISTINCT CASE WHEN v.visit_date >= CURRENT_DATE - INTERVAL '30 days' THEN v.visit_id END) as visits_last_30_days,
+             COUNT(DISTINCT CASE WHEN v.visit_date >= CURRENT_DATE - INTERVAL '7 days' THEN v.visit_id END) as visits_last_7_days
+           FROM visits v
+           WHERE v.provider_id = $1`,
+          [provider.provider_id]
+        );
+
+        if (statsRes.rows.length > 0) {
+          statistics = {
+            ...statsRes.rows[0],
+            license_status: provider.license_expiry 
+              ? new Date(provider.license_expiry) > new Date() ? 'Valid' : 'Expired'
+              : 'Not Set'
+          };
+        }
+      }
+    }
+
+    // Get activity statistics for all users
+    if (!statistics) {
+      statistics = {};
+    }
+
+    // Get recent audit logs for this user
+    const auditLogsRes = await pool.query(
+      `SELECT 
+         al.log_id,
+         al.action_type,
+         al.table_name,
+         al.event_type,
+         al.timestamp,
+         al.ip_address,
+         al.endpoint
+       FROM audit_logs al
+       WHERE al.user_id = $1
+       ORDER BY al.timestamp DESC
+       LIMIT 10`,
+      [user_id]
+    );
+
+    const recentActivity = auditLogsRes.rows;
+
+    res.status(200).json({
+      status: "success",
+      message: "User details fetched successfully",
+      data: {
+        user,
+        provider,
+        statistics,
+        recentActivity
+      }
+    });
+
+  } catch (error) {
+    console.error("getUserDetails error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error while fetching user details"
+    });
+  }
+};
+
+export const getHospitalUsers = async (req,res) =>{
+  try{
+    const hospital_id = req.user.hospital_id;
+
+    const result = await pool.query(
+      `SELECT 
+         u.user_id, 
+          u.first_name,
+          u.last_name,
+          u.email,
+          u.username,
+          u.role_id,
+          r.role_name,
+          u.department,
+          u.employment_status,  
+          u.account_status,
+          u.created_at
+       FROM users u 
+        LEFT JOIN roles r ON u.role_id = r.role_id
+        WHERE u.hospital_id = $1
+        ORDER BY u.created_at DESC`,
+      [hospital_id]
+    );
+    res.status(200).json({
+      status: "success",
+      message: "Hospital users fetched successfully",
+      users: result.rows
+    }
+  )
+
+  }catch(error){
+    console.error("getHospitalUsers error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error while fetching hospital users"
+    });
+  }
+}
