@@ -1,7 +1,9 @@
 import express from 'express';
 import {registerPatient,addAllergies,addMedication,
     addChronicConditions,addFamilyHistory,addSocialHistory,updatePatient,updateSocialHistory,  
-      updateAllergy,updateMedication,updateChronicCondition,updateFamilyHistory,getPatientFullProfile, deletePatient} 
+      updateAllergy,updateMedication,updateChronicCondition,updateFamilyHistory,getPatientFullProfile, deletePatient
+    ,getPatients,getPatientById, searchPatientsInTheWeek, getFrequentlyCheckedPatientsThirtyDays, getAdmittedPatients,
+  dischargePatient} 
     from '../controllers/patientController.js';
 
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
@@ -9,7 +11,18 @@ import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
 const router = express.Router();
 router.use(authMiddleware)
 
-router.get('/get-patient/:patient_id',authMiddleware, getPatientFullProfile)
+router.get('/get-patients', getPatients)
+
+router.get('/search-patients-week', searchPatientsInTheWeek)
+// router.get('/get-patient/:patient_id', getPatientFullProfile)
+router.get('/get-patient/:patient_id', getPatientById)
+
+router.put('/discharge-patient/:visit_id', dischargePatient)
+
+router.get('/admitted-patients', getAdmittedPatients)
+router.get('/frequently-checked-patients', getFrequentlyCheckedPatientsThirtyDays)
+
+
 router.post('/register-patient', registerPatient);
 router.post('/add-allergy', addAllergies);
 router.post('/add-medication', addMedication);

@@ -1,0 +1,183 @@
+.btn-cancel,
+.btn-back {
+  width: 20%;
+  padding: 14px 24px;
+  background: #f3f4f6;
+  color: #374151;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+
+
+.signout-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 100vh;
+  /* background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); */
+  padding: 20px;
+}
+
+.signout-card {
+  background: white;
+  border-radius: 16px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  padding: 40px;
+  max-width: 450px;
+  width: 100%;
+  text-align: center;
+}
+
+/* .signout-icon {
+  font-size: 64px;
+  margin-bottom: 20px;
+  animation: wave 1s ease-in-out infinite;
+} */
+/* 
+@keyframes wave {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-15deg); }
+  75% { transform: rotate(15deg); }
+} */
+
+.signout-card h2 {
+  font-size: 28px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 12px;
+}
+
+.signout-card p {
+  font-size: 16px;
+  color: #6b7280;
+  margin-bottom: 24px;
+  line-height: 1.6;
+}
+.user-avatar-box{
+  /* background-color: #3300ff; */
+}
+.user-info-box{
+  text-align: center;
+  justify-content: center;
+}
+.user-info{
+  background: #f9fafb;
+  text-align: center;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+}
+
+.user-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-bottom: 4px;
+}
+
+.user-email {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.button-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.btn-signout,
+.btn-confirm {
+  width: 100%;
+  padding: 14px 24px;
+  background: #ef4444;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.btn-signout:hover,
+.btn-confirm:hover {
+  background: #dc2626;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(239, 68, 68, 0.4);
+}
+
+
+.btn-cancel:hover,
+.btn-back:hover {
+  background: #e5e7eb;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .signout-card {
+    padding: 30px 20px;
+  }
+
+  .signout-card h2 {
+    font-size: 24px;
+  }
+
+  .signout-icon {
+    font-size: 48px;
+  }
+}
+
+
+
+.user-info-box {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  background: #f9fafb;
+  border-radius: 8px;
+  padding: 16px;
+  margin-bottom: 24px;
+  text-align: left;
+}
+
+.user-avatar-box {
+  flex-shrink: 0;
+}
+
+.user-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 600;
+  font-size: 18px;
+}
+
+.user-details {
+  flex: 1;
+  text-align: left;
+}
+
+.user-name {
+  font-size: 18px;
+  font-weight: 600;
+  color: #1f2937;
+  margin: 0 0 4px 0; /* Override the inherited margin from .signout-card p */
+}
+
+.user-email {
+  font-size: 14px;
+  color: #6b7280;
+  margin: 0;
+}

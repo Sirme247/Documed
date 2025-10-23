@@ -3,6 +3,9 @@ import { logAudit } from "../libs/auditLogger.js";
 
 export const registerVisit = async (req, res)=>{
     try{
+        const user_id = req.user.user_id;
+
+
         const {visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id,priority_level,referring_provider_name,referring_provider_hospital,reason_for_visit,admission_status,discharge_date,notes} = req.body;
         if(!visit_number || !visit_type || !patient_id || !hospital_id){
             return res.status(400).json(
@@ -24,11 +27,11 @@ export const registerVisit = async (req, res)=>{
             )
         }
         const newVisit = await pool.query( `INSERT INTO visits 
-            (visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id,priority_level,referring_provider_name,referring_provider_hospital,reason_for_visit,admission_status,discharge_date,notes)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) 
+            (visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id,priority_level,referring_provider_name,referring_provider_hospital,reason_for_visit,admission_status,discharge_date,notes,user_id)
+            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) 
             RETURNING visit_id`,
             [
-                visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id??null,priority_level,referring_provider_name??null,referring_provider_hospital??null,reason_for_visit,admission_status??null,discharge_date?? null,notes??null
+                visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id??null,priority_level,referring_provider_name??null,referring_provider_hospital??null,reason_for_visit,admission_status??null,discharge_date?? null,notes??null, user_id
             ])
 
         const visit_id = newVisit.rows[0].visit_id;
@@ -130,13 +133,26 @@ export const recordTreatments = async (req, res)=>{
                 }
             )
         }
-        const newTreatment = await pool.query( `INSERT INTO treatments
-            (visit_id,treatment_name,treatment_type,procedure_code,treatment_description,start_date,end_date,outcome,complications,follow_up_required,treatment_notes)    
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-            [
-                visit_id,treatment_name,treatment_type??null,procedure_code??null,treatment_description??null,start_date??null,end_date??null,outcome??'Ongoing',complications??null,follow_up_required||false,treatment_notes??null
-            ]
-        )
+       const newTreatment = await pool.query(
+  `INSERT INTO treatments
+    (visit_id, treatment_name, treatment_type, procedure_code, treatment_description,
+     start_date, end_date, outcome, complications, follow_up_required, treatment_notes)
+   VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+  [
+    visit_id,
+    treatment_name,
+    treatment_type === "" ? null : treatment_type,
+    procedure_code === "" ? null : procedure_code,
+    treatment_description === "" ? null : treatment_description,
+    start_date === "" ? null : start_date,
+    end_date === "" ? null : end_date,
+    outcome === "" ? "Ongoing" : outcome, // default if empty
+    complications === "" ? null : complications,
+    follow_up_required === true, // ensures boolean
+    treatment_notes === "" ? null : treatment_notes,
+  ]
+);
+
         res.status(201).json(
             {
                 status: "success",
@@ -161,13 +177,23 @@ export const recordVisitPrescriptions = async (req, res)=>{
                 }
             )
         }
-        const newPrescription = await pool.query( `INSERT INTO visit_prescriptions
-            (visit_id, medication_name, dosage, frequency, start_date, end_date, refills_allowed,instructions, is_active)    
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
-            [
-                visit_id, medication_name, dosage??null, frequency??NULL, start_date??NULL, end_date??NULL, refills_allowed??0,instructions??NULL, is_active??true
-            ]   
-        )
+        const newPrescription = await pool.query(
+  `INSERT INTO visit_prescriptions
+    (visit_id, medication_name, dosage, frequency, start_date, end_date, refills_allowed, instructions, is_active)
+    VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+  [
+    visit_id,
+    medication_name,
+    dosage || null,
+    frequency || null,
+    start_date === "" ? null : start_date,
+    end_date === "" ? null : end_date,
+    refills_allowed ?? 0,
+    instructions || null,
+    is_active ?? true
+  ]
+);
+
         res.status(201).json(
             {
 
@@ -477,5 +503,274 @@ export const deleteVisit = async (req, res) => {
     });
   } finally {
     client.release();
+  }
+};
+
+export const getVisitsList = async (req, res) => {
+  try {
+    const { 
+      page = 1, 
+      limit = 10, 
+      hospital_id, 
+      branch_id,
+      visit_type,
+      priority_level,
+      admission_status,
+      search,
+      start_date,
+      end_date
+    } = req.query;
+
+    const offset = (page - 1) * limit;
+    
+    let query = `
+      SELECT 
+        v.visit_id,
+        v.visit_number,
+        v.visit_date,
+        v.visit_type,
+        v.priority_level,
+        v.reason_for_visit,
+        v.admission_status,
+        v.patient_id,
+        p.first_name AS patient_first_name,
+        p.last_name AS patient_last_name,
+        p.primary_number AS patient_phone,
+        v.provider_id,
+        v.hospital_id,
+        h.hospital_name,
+        v.branch_id,
+        b.branch_name,
+        v.created_at,
+        v.updated_at
+      FROM visits v
+      LEFT JOIN patients p ON v.patient_id = p.patient_id
+      LEFT JOIN hospitals h ON v.hospital_id = h.hospital_id
+      LEFT JOIN branches b ON v.branch_id = b.branch_id
+      WHERE 1=1
+    `;
+
+    const queryParams = [];
+    let paramCounter = 1;
+
+    if (hospital_id) {
+      query += ` AND v.hospital_id = $${paramCounter}`;
+      queryParams.push(hospital_id);
+      paramCounter++;
+    }
+
+    if (branch_id) {
+      query += ` AND v.branch_id = $${paramCounter}`;
+      queryParams.push(branch_id);
+      paramCounter++;
+    }
+
+    if (visit_type) {
+      query += ` AND v.visit_type = $${paramCounter}`;
+      queryParams.push(visit_type);
+      paramCounter++;
+    }
+
+    if (priority_level) {
+      query += ` AND v.priority_level = $${paramCounter}`;
+      queryParams.push(priority_level);
+      paramCounter++;
+    }
+
+    if (admission_status) {
+      query += ` AND v.admission_status = $${paramCounter}`;
+      queryParams.push(admission_status);
+      paramCounter++;
+    }
+
+    if (search) {
+      query += ` AND (
+        p.first_name ILIKE $${paramCounter} OR 
+        p.last_name ILIKE $${paramCounter} OR
+        v.visit_number ILIKE $${paramCounter} OR
+        v.reason_for_visit ILIKE $${paramCounter}
+      )`;
+      queryParams.push(`%${search}%`);
+      paramCounter++;
+    }
+
+    if (start_date) {
+      query += ` AND v.visit_date >= $${paramCounter}`;
+      queryParams.push(start_date);
+      paramCounter++;
+    }
+
+    if (end_date) {
+      query += ` AND v.visit_date <= $${paramCounter}`;
+      queryParams.push(end_date);
+      paramCounter++;
+    }
+
+    const countQuery = query.replace(
+      /SELECT[\s\S]*FROM/,
+      'SELECT COUNT(*) FROM'
+    );
+    const countResult = await pool.query(countQuery, queryParams);
+    const totalRecords = parseInt(countResult.rows[0].count);
+
+    query += ` ORDER BY v.visit_date DESC, v.created_at DESC`;
+    query += ` LIMIT $${paramCounter} OFFSET $${paramCounter + 1}`;
+    queryParams.push(limit, offset);
+
+    const visitsResult = await pool.query(query, queryParams);
+
+    res.status(200).json({
+      status: "success",
+      message: "Visits list retrieved successfully",
+      data: visitsResult.rows,
+      pagination: {
+        current_page: parseInt(page),
+        total_pages: Math.ceil(totalRecords / limit),
+        total_records: totalRecords,
+        per_page: parseInt(limit)
+      }
+    });
+
+  } catch (error) {
+    console.error("Error fetching visits list:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Server error"
+    });
+  }
+};
+
+export const getHospitalVisitsForDay = async (req, res) => {
+  try {
+    const hospital_id = req.user.hospital_id;
+    const branch_id = req.user.branch_id;
+
+    if (!hospital_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Hospital ID not found for user"
+      });
+    }
+
+    
+    let query = `
+      SELECT 
+        v.visit_id,
+        v.visit_number,
+        v.visit_date,
+        v.visit_type,
+        v.reason_for_visit,
+        v.priority_level,
+        v.admission_status,
+        p.first_name AS patient_first_name,
+        p.last_name AS patient_last_name,
+        p.primary_number AS patient_phone,
+        b.branch_name,
+        h.hospital_name
+      FROM visits v
+      LEFT JOIN patients p ON v.patient_id = p.patient_id
+      LEFT JOIN hospitals h ON v.hospital_id = h.hospital_id
+      LEFT JOIN branches b ON v.branch_id = b.branch_id
+      WHERE v.hospital_id = $1
+      AND DATE(v.visit_date) = CURRENT_DATE
+    `;
+
+    const params = [hospital_id];
+
+    if (branch_id) {
+      query += ` AND v.branch_id = $2`;
+      params.push(branch_id);
+    }
+
+    query += ` ORDER BY v.visit_date DESC, v.created_at DESC`;
+
+    const result = await pool.query(query, params);
+
+    console.log('Today visits query result:', {
+      hospital_id,
+      branch_id,
+      total_visits: result.rows.length,
+      date: new Date().toISOString()
+    });
+
+    res.status(200).json({
+      status: "success",
+      scope: branch_id ? "branch" : "hospital",
+      total_visits: result.rows.length,
+      visits: result.rows
+    });
+
+  } catch (error) {
+    console.error("Error fetching hospital visits for day:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Server error",
+      error: error.message
+    });
+  }
+};
+
+export const visitsInHospital = async (req, res) => {
+  try {
+    const hospital_id = req.user.hospital_id;
+    const branch_id = req.user.branch_id || null;
+
+    if (!hospital_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Hospital ID not found for user"
+      });
+    }
+
+    let query;
+    let params;
+
+    if (branch_id) {
+      // ✅ User is tied to a specific branch
+      query = `
+        SELECT 
+          v.*,
+          p.first_name as patient_first_name,
+          p.last_name as patient_last_name,
+          b.branch_name
+        FROM visits v
+        LEFT JOIN patients p ON v.patient_id = p.patient_id
+        LEFT JOIN branches b ON v.branch_id = b.branch_id
+        WHERE v.hospital_id = $1 AND v.branch_id = $2
+        ORDER BY v.visit_date DESC
+      `;
+      params = [hospital_id, branch_id];
+    } else {
+      // ✅ User is tied to the entire hospital (no branch restriction)
+      query = `
+        SELECT 
+          v.*,
+          p.first_name as patient_first_name,
+          p.last_name as patient_last_name,
+          b.branch_name
+        FROM visits v
+        LEFT JOIN patients p ON v.patient_id = p.patient_id
+        LEFT JOIN branches b ON v.branch_id = b.branch_id
+        WHERE v.hospital_id = $1
+        ORDER BY v.visit_date DESC
+      `;
+      params = [hospital_id];
+    }
+
+    const result = await pool.query(query, params);
+
+    res.status(200).json({
+      status: "success",
+      total_visits: result.rows.length,
+      visits: result.rows
+    });
+
+  } catch (error) {
+    console.error("Error fetching visits in hospital:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Server error",
+      error: error.message
+    });
   }
 };

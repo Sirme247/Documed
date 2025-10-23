@@ -6,7 +6,8 @@ import {registerUser,
      adminResetPassword,
      adminUpdateUser,
      userUpdateUser,
-    registerExistingMedicalPractitioner,deleteUser} from '../controllers/userController.js';
+    registerExistingMedicalPractitioner,deleteUser,getAllUsers,getUserDetails,getHospitalUsers,
+checkExistingPractitioner,searchDoctor} from '../controllers/userController.js';
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -23,6 +24,10 @@ const router = express.Router();
 
 router.get('/', authMiddleware, getUser);
 
+router.get('/hospital-users', authMiddleware, requireRole(2), getHospitalUsers);
+router.get('/list', authMiddleware, requireRole(1, 2), getAllUsers);
+router.get('/user-details/:user_id', authMiddleware, requireRole(1,2), getUserDetails);
+
 router.delete('/delete-user/:user_id',authMiddleware, requireRole(1,2), deleteUser);
 router.post('/register-user', authMiddleware, requireRole(1,2),  registerUser);
 router.put("/change-password", authMiddleware, passwordChange);
@@ -30,8 +35,10 @@ router.put('/admin-reset-password',authMiddleware, requireRole(1, 2), adminReset
 router.put('/admin-update-user',authMiddleware, requireRole(1, 2), adminUpdateUser);
 router.put('/self-update',authMiddleware, userUpdateUser);
 router.post('/self-register', selfRegister);
-router.post('/register-existing-doctor',authMiddleware, requireRole(1,2), registerExistingMedicalPractitioner);
-
+// router.post('/register-existing-doctor',authMiddleware, requireRole(1,2), registerExistingMedicalPractitioner);
+router.get('/check-existing-practitioner', authMiddleware, checkExistingPractitioner);
+router.get('/search-doctor', authMiddleware, searchDoctor);
+router.post('/register-existing-practitioner', authMiddleware, registerExistingMedicalPractitioner);
 
 
 export default router;
