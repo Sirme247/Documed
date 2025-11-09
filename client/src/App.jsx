@@ -10,7 +10,7 @@ import LocalAdminDashboard from './pages/dashboard/local-admin-dashboard'
 import NurseDashboard from './pages/dashboard/nurse-dashboard'
 import ReceptionistDashboard from './pages/dashboard/receptionist-dashboard'
 import SystemSettings from './pages/settings/system-settings'
-import UserSettings from './pages/settings/user-settings'
+import UserProfile from './pages/users/user-profile.jsx'
 import EditHospitals from './pages/hospitals/edit_hospital'
 import HospitalList from './pages/hospitals/hospital-list'
 import HospitalProfile from './pages/hospitals/hospital-profile'
@@ -51,6 +51,7 @@ import LastWeekVisits from './pages/visits/last-week-visits.jsx'
 import FrequentPatients from './pages/patients/admitted-patients.jsx'
 import Sidebar from './components/sidebar.jsx' // ✅ Import the sidebar
 import Breadcrumb from './components/breadcrumb.jsx'
+import Summary from './pages/patients/summary.jsx'
 
 import { jwtDecode } from 'jwt-decode'
 import useStore from './store/index.js'
@@ -280,6 +281,7 @@ function App() {
             {/* Password change route */}
             <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4, 5]} />}>
               <Route path="/password-change" element={<PasswordChange />} />
+              <Route path="/ai-summary/:patient_id" element={<Summary />} />
             </Route>
             
             {/* Root redirect */}
@@ -289,6 +291,9 @@ function App() {
             {/* Shared routes for all medical staff */}
             <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4, 5]} />}>
               <Route path="/patients/register" element={<RegisterPatient />} />
+
+              <Route path="/profile/user" element={<UserProfile />} />
+              
               <Route path="/patients/list" element={<PatientList />} />
               <Route path="/patients/:patient_id" element={<PatientDetails />} />
               <Route path="/patients/:patient_id/edit" element={<EditPatient />} />
@@ -310,7 +315,7 @@ function App() {
               <Route path="/visits/record-prescriptions" element={<RecordPrescription />} />
               <Route path="/visits/record-treatment" element={<RecordTreatment />} />
               
-              <Route path="/settings/user" element={<UserSettings />} />
+              
               <Route path="/branches/:branch_id" element={<BranchDetails />} />
             </Route>
 

@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import "./visits.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
+import {useLocation, useNavigate} from 'react-router-dom';
 import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
 
@@ -19,6 +20,8 @@ const DiagnosisSchema = z.object({
 
 const RecordDiagnosis = () => {
   const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   const {
     register,

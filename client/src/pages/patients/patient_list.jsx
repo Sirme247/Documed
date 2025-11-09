@@ -326,7 +326,7 @@ const PatientList = () => {
           <table className="patients-table">
             <thead>
               <tr>
-                <th>MRN</th>
+                {/* <th>MRN</th> */}
                 <th>Name</th>
                 <th>Age</th>
                 <th>Gender</th>
@@ -341,11 +341,11 @@ const PatientList = () => {
             <tbody>
               {patients.map((patient) => (
                 <tr key={patient.patient_id}>
-                  <td>
+                  {/* <td>
                     {patient.identifiers && patient.identifiers.length > 0 
                       ? patient.identifiers[0].patient_mrn 
                       : "N/A"}
-                  </td>
+                  </td> */}
                   <td>
                     <div className="patient-name">
                       <strong>

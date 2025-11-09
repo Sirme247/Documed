@@ -331,18 +331,18 @@ const UserList = () => {
                 <th onClick={() => handleSort("first_name")} className="sortable">
                   Name {filters.sort_by === "first_name" && (filters.sort_order === "ASC" ? "↑" : "↓")}
                 </th>
-                <th onClick={() => handleSort("username")} className="sortable">
+                {/* <th onClick={() => handleSort("username")} className="sortable">
                   Username {filters.sort_by === "username" && (filters.sort_order === "ASC" ? "↑" : "↓")}
-                </th>
+                </th> */}
                 <th onClick={() => handleSort("email")} className="sortable">
                   Email {filters.sort_by === "email" && (filters.sort_order === "ASC" ? "↑" : "↓")}
                 </th>
                 <th>Role</th>
                 <th>Hospital</th>
                 <th>Department</th>
-                <th onClick={() => handleSort("employment_status")} className="sortable">
+                {/* <th onClick={() => handleSort("employment_status")} className="sortable">
                   Employment {filters.sort_by === "employment_status" && (filters.sort_order === "ASC" ? "↑" : "↓")}
-                </th>
+                </th> */}
                 <th onClick={() => handleSort("account_status")} className="sortable">
                   Account {filters.sort_by === "account_status" && (filters.sort_order === "ASC" ? "↑" : "↓")}
                 </th>
@@ -362,18 +362,18 @@ const UserList = () => {
                       {user.is_provider && <span className="provider-badge">Provider</span>}
                     </div>
                   </td>
-                  <td>{user.username}</td>
+                  {/* <td>{user.username}</td> */}
                   <td className="email-cell">{user.email}</td>
                   <td>
                     <span className="role-badge">{user.role_name}</span>
                   </td>
                   <td>{user.hospital_name || "N/A"}</td>
                   <td>{user.department || "N/A"}</td>
-                  <td>
+                  {/* <td>
                     <span className={getStatusClass(user.employment_status)}>
                       {user.employment_status}
                     </span>
-                  </td>
+                  </td> */}
                   <td>
                     <span className={getStatusClass(user.account_status)}>
                       {user.account_status}
@@ -387,15 +387,15 @@ const UserList = () => {
                         className="btn-view"
                         title="View Details"
                       >
-                        👁️
+                        view
                       </button>
-                      <button
+                      {/* <button
                         onClick={() => handleEditUser(user.user_id)}
                         className="btn-edit"
                         title="Edit User"
                       >
                         ✏️
-                      </button>
+                      </button> */}
                     </div>
                   </td>
                 </tr>

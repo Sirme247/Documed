@@ -2032,14 +2032,7 @@ export const patientFullData = async (req, res) => {
 
     const patient = patientResult.rows[0];
 
-    const identifiersQuery = `
-      SELECT pi.*, h.hospital_name 
-      FROM patient_identifiers pi
-      LEFT JOIN hospitals h ON pi.hospital_id = h.hospital_id
-      WHERE pi.patient_id = $1
-    `;
-    const identifiers = await client.query(identifiersQuery, [patient_id]);
-
+  
     const allergiesQuery = `
       SELECT * FROM allergies 
       WHERE patient_id = $1
@@ -2163,7 +2156,7 @@ export const patientFullData = async (req, res) => {
     // Construct comprehensive response
     const fullPatientData = {
       demographics: patient,
-      identifiers: identifiers.rows,
+      
       allergies: allergies.rows,
       medications: medications.rows,
       chronic_conditions: chronicConditions.rows,

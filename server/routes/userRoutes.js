@@ -7,6 +7,7 @@ import {registerUser,
      adminUpdateUser,
      userUpdateUser,
     registerExistingMedicalPractitioner,deleteUser,getAllUsers,getUserDetails,getHospitalUsers,
+    getUserProfile,
 checkExistingPractitioner,searchDoctor} from '../controllers/userController.js';
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
 
@@ -27,6 +28,8 @@ router.get('/', authMiddleware, getUser);
 router.get('/hospital-users', authMiddleware, requireRole(2), getHospitalUsers);
 router.get('/list', authMiddleware, requireRole(1, 2), getAllUsers);
 router.get('/user-details/:user_id', authMiddleware, requireRole(1,2), getUserDetails);
+
+router.get('/user-profile', authMiddleware, getUserProfile);
 
 router.delete('/delete-user/:user_id',authMiddleware, requireRole(1,2), deleteUser);
 router.post('/register-user', authMiddleware, requireRole(1,2),  registerUser);

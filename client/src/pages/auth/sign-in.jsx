@@ -142,7 +142,7 @@ const SignIn = () => {
             our hospital operations significantly."
           </blockquote>
           <div className="author">
-            <span className="author-name">- Healthcare Professional</span>
+            <span className="author-name">- Agha Khan Chief of Surgery</span>
           </div>
         </div>
       </aside>

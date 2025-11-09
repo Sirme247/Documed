@@ -67,7 +67,7 @@ export const recordVitals = async (req, res)=>{
             (visit_id,  blood_pressure,heart_rate, respiratory_rate, temperature,oxygen_saturation,weight,weight_unit, height,height_unit, bmi)    
             VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
             [
-                visit_id,  blood_pressure,heart_rate, respiratory_rate, temperature,oxygen_saturation,weight??null,weight_unit??'kg', height??NULL,height_unit??'cm', bmi??null
+                visit_id,  blood_pressure,heart_rate, respiratory_rate, temperature,oxygen_saturation,weight||null,weight_unit||'kg', height||null,height_unit||'cm', bmi||null
             ]
         )   
         res.status(201).json(

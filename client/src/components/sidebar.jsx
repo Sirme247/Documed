@@ -8,6 +8,7 @@ import {
   ClipboardList,
   FileText,
   Settings,
+  User,
   LogOut,
   ChevronDown,
   ChevronRight,
@@ -59,15 +60,14 @@ const Sidebar = () => {
         ]
       },
       {
-        title: 'Settings',
-        icon: Settings,
-        submenu: [
-          { title: 'System Settings', path: '/settings/system' },
-          { title: 'My Settings', path: '/settings/user' }
-        ]
+        title: 'Profile',
+        icon: User,
+        
+        path: '/profile/user' 
+        
       },
       {
-        title: 'Audits',
+        title: 'Audit Logs',
         icon: ClipboardList,
         path: './audits/logs'
       }
@@ -113,9 +113,9 @@ const Sidebar = () => {
       },
      
       {
-        title: 'Settings',
-        icon: Settings,
-        path: '/settings/user'
+        title: 'Profile',
+        icon: User,
+        path: '/profile/user'
       }
     ],
 
@@ -155,9 +155,9 @@ const Sidebar = () => {
       //   ]
       // },
       {
-        title: 'Settings',
-        icon: Settings,
-        path: '/settings/user'
+        title: 'Profile',
+        icon: User,
+        path: '/profile/user'
       }
     ],
 
@@ -186,9 +186,9 @@ const Sidebar = () => {
         ]
       },
       {
-        title: 'Settings',
-        icon: Settings,
-        path: '/settings/user'
+        title: 'Profile',
+        icon: User,
+        path: '/profile/user'
       }
     ],
 
@@ -217,9 +217,9 @@ const Sidebar = () => {
         ]
       },
       {
-        title: 'Settings',
-        icon: Settings,
-        path: '/settings/user'
+        title: 'Profile',
+        icon: User,
+        path: '/profile/user'
       }
     ]
   };

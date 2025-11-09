@@ -1641,3 +1641,191 @@ export const getHospitalUsers = async (req,res) =>{
     });
   }
 }
+
+
+export const getUserProfile = async (req, res) => {
+  try {
+    
+    const user_id = req.user.user_id;
+
+    if (!user_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "User ID is required"
+      });
+    }
+
+  
+
+    // Fetch comprehensive user details
+    const result = await pool.query(
+      `SELECT 
+         u.user_id,
+         u.first_name,
+         u.middle_name,
+         u.last_name,
+         u.username,
+         u.date_of_birth,
+         u.gender,
+         u.email,
+         u.contact_info,
+         u.address_line,
+         u.role_id,
+         r.role_name,
+         u.hospital_id,
+         h.hospital_name,
+         h.hospital_type,
+         h.city AS hospital_city,
+         h.state AS hospital_state,
+         h.country AS hospital_country,
+         h.email AS hospital_email,
+         h.contact_number AS hospital_phone,
+         u.branch_id,
+         b.branch_name,
+         b.branch_type,
+         b.city AS branch_city,
+         b.state AS branch_state,
+         b.country AS branch_country,
+         b.email AS branch_email,
+         b.contact_number AS branch_phone,
+         u.employee_id,
+         u.department,
+         u.employment_status,
+         u.account_status,
+         u.last_login,
+         u.must_change_password,
+         u.created_at,
+         u.updated_at
+       FROM users u
+       LEFT JOIN roles r ON u.role_id = r.role_id
+       LEFT JOIN hospitals h ON u.hospital_id = h.hospital_id
+       LEFT JOIN branches b ON u.branch_id = b.branch_id
+       WHERE u.user_id = $1`,
+      [user_id]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "User not found"
+      });
+    }
+
+    const user = result.rows[0];
+    let provider = null;
+    let statistics = null;
+
+    // If user is a healthcare provider (Doctor or Nurse)
+    if (user.role_id === 3 || user.role_id === 4) {
+      const providerRes = await pool.query(
+        `SELECT 
+           hp.provider_id,
+           hp.license_number,
+           hp.license_expiry,
+           hp.specialization,
+           hp.created_at AS provider_created_at,
+           hp.updated_at AS provider_updated_at
+         FROM healthcare_providers hp
+         WHERE hp.user_id = $1`,
+        [user_id]
+      );
+
+      if (providerRes.rows.length > 0) {
+        provider = providerRes.rows[0];
+
+        // Get all hospitals/branches this provider is linked to
+        const providerHospitalsRes = await pool.query(
+          `SELECT 
+             ph.provider_hospital_id,
+             ph.hospital_id,
+             h.hospital_name,
+             h.hospital_type,
+             h.city AS hospital_city,
+             h.state AS hospital_state,
+             h.country AS hospital_country,
+             ph.branch_id,
+             b.branch_name,
+             b.branch_type,
+             b.city AS branch_city,
+             b.state AS branch_state,
+             b.country AS branch_country,
+             ph.start_date,
+             ph.end_date,
+             ph.is_primary
+           FROM provider_hospitals ph
+           LEFT JOIN hospitals h ON ph.hospital_id = h.hospital_id
+           LEFT JOIN branches b ON ph.branch_id = b.branch_id
+           WHERE ph.provider_id = $1
+           ORDER BY ph.is_primary DESC, ph.start_date DESC`,
+          [provider.provider_id]
+        );
+
+        provider.hospitals = providerHospitalsRes.rows.filter(row => row.hospital_id);
+        provider.branches = providerHospitalsRes.rows.filter(row => row.branch_id);
+
+        // Get provider statistics
+        const statsRes = await pool.query(
+          `SELECT 
+             COUNT(DISTINCT v.visit_id) as total_visits,
+             COUNT(DISTINCT v.patient_id) as total_patients,
+             COUNT(DISTINCT CASE WHEN v.visit_date >= CURRENT_DATE - INTERVAL '30 days' THEN v.visit_id END) as visits_last_30_days,
+             COUNT(DISTINCT CASE WHEN v.visit_date >= CURRENT_DATE - INTERVAL '7 days' THEN v.visit_id END) as visits_last_7_days
+           FROM visits v
+           WHERE v.provider_id = $1`,
+          [provider.provider_id]
+        );
+
+        if (statsRes.rows.length > 0) {
+          statistics = {
+            ...statsRes.rows[0],
+            license_status: provider.license_expiry 
+              ? new Date(provider.license_expiry) > new Date() ? 'Valid' : 'Expired'
+              : 'Not Set'
+          };
+        }
+      }
+    }
+
+    // Get activity statistics for all users
+    if (!statistics) {
+      statistics = {};
+    }
+
+    // Get recent audit logs for this user
+    const auditLogsRes = await pool.query(
+      `SELECT 
+         al.log_id,
+         al.action_type,
+         al.table_name,
+         al.event_type,
+         al.timestamp,
+         al.ip_address,
+         al.endpoint
+       FROM audit_logs al
+       WHERE al.user_id = $1
+       ORDER BY al.timestamp DESC
+       LIMIT 10`,
+      [user_id]
+    );
+
+    const recentActivity = auditLogsRes.rows;
+
+    res.status(200).json({
+      status: "success",
+      message: "User details fetched successfully",
+      data: {
+        user,
+        provider,
+        statistics,
+        recentActivity
+      }
+    });
+
+  } catch (error) {
+    console.error("getUserDetails error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error while fetching user details"
+    });
+  }
+};

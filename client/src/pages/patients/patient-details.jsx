@@ -105,10 +105,19 @@ const PatientDetails = () => {
     <div className="patient-details-container">
       {/* Header */}
       <div className="details-header">
-        <button onClick={() => navigate("/patients")} className="btn-back">
+        {/* <button onClick={() => navigate("/patients")} className="btn-back">
           ← Back to Patients
-        </button>
+        </button> */}
+         <h2>Patient Details</h2>
+      
         <div className="header-actions">
+          <button 
+          onClick={() => navigate(`/ai-summary/${patient.patient_id}`, { state: { patient } })} 
+          className="btn-primary"
+        >
+          Patient Summary
+        </button>
+
           <button className="btn-secondary">Edit Patient</button>
           <button 
             onClick={() => navigate("/visits/new", { state: { patient } })} 

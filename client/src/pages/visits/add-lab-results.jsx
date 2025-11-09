@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import "./visits.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
+import {useLocation, useNavigate} from 'react-router-dom';
 import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
 
@@ -19,19 +20,31 @@ const LabTestSchema = z.object({
 
 const RecordLabTest = () => {
   const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const {visit_id, patient_id} = location.state || {};
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    setValue
   } = useForm({
     resolver: zodResolver(LabTestSchema),
+    visit_id: visit_id?.toString() || "",
     mode: "onBlur",
     defaultValues: {
       priority: "normal"
     }
   });
+
+  useEffect(()=>{
+    if(visit_id){
+      setValue("visit_id", visit_id.toString());
+    }
+  })
 
   const onSubmit = async (data) => {
     console.log("Form data being sent:", data);
@@ -47,7 +60,11 @@ const RecordLabTest = () => {
       const { data: res } = await api.post("/visits/record-lab-tests", formattedData);
 
       toast.success(res.message || "Lab test recorded successfully!");
-      reset();
+      if (visit_id) {
+        navigate (`/visits/${visit_id}`);
+      } else {
+        
+      }
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.message || error.message);
@@ -66,7 +83,11 @@ const RecordLabTest = () => {
           
           <div className="form-group">
             <label>Visit ID *</label>
-            <input type="number" {...register("visit_id")} />
+            <input type="number" {...register("visit_id")} 
+             readOnly = {!!visit_id}
+              disabled = {!!visit_id}
+               style={visit_id ? { background: '#f3f4f6', cursor: 'not-allowed', opacity: 0.7 } : {}}
+            />
             {errors.visit_id && (
               <div className="error-message">{errors.visit_id.message}</div>
             )}

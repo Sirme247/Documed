@@ -1,8 +1,9 @@
-import React, { useState } from "react";
+import React, { useState,useEffect } from "react";
 import "./visits.css";
 import { zodResolver } from "@hookform/resolvers/zod";
-import { z } from "zod";
+import { z } from "zod";    
 import { useForm } from "react-hook-form";
+import { useLocation, useNavigate} from "react-router-dom";       
 import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
 
@@ -22,16 +23,22 @@ const TreatmentSchema = z.object({
 
 const RecordTreatment = () => {
   const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const {visit_id, patient_id} = location.state || {};
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    setValue
   } = useForm({
     resolver: zodResolver(TreatmentSchema),
     mode: "onBlur",
     defaultValues: {
+      visit_id: visit_id?.toString() || "",
       outcome: "Ongoing",
       follow_up_required: false
     }
@@ -51,7 +58,11 @@ const RecordTreatment = () => {
       const { data: res } = await api.post("/visits/record-treatment", formattedData);
 
       toast.success(res.message || "Treatment recorded successfully!");
-      reset();
+      if (visit_id) {
+        navigate(`/visits/${visit_id}`);
+      } else {
+        reset();
+      }
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.message || error.message);
@@ -70,7 +81,12 @@ const RecordTreatment = () => {
           
           <div className="form-group">
             <label>Visit ID *</label>
-            <input type="number" {...register("visit_id")} />
+            <input type="number" {...register("visit_id")}
+              
+              readOnly = {!!visit_id}
+              disabled = {!!visit_id}
+               style={visit_id ? { background: '#f3f4f6', cursor: 'not-allowed', opacity: 0.7 } : {}}
+            />
             {errors.visit_id && (
               <div className="error-message">{errors.visit_id.message}</div>
             )}

@@ -178,7 +178,7 @@
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow-x: scroll;
   margin-bottom: 20px;
-  width: 90vw;
+  width: 100%;
 }
 
 .users-table {
@@ -356,6 +356,7 @@
   font-weight: 500;
 }
 
+
 /* Responsive Design */
 @media (max-width: 768px) {
   .user-list-container {
@@ -365,7 +366,7 @@
   .user-list-header {
     flex-direction: column;
     align-items: flex-start;
-    gap: 16px;
+    gap: 5px;
   }
 
   .user-list-header h1 {
@@ -390,6 +391,6 @@
   }
 
   .users-table {
-    min-width: 1200px;
+    min-width: 1800px;
   }
 }
