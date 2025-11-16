@@ -10,20 +10,28 @@ import api from "../../libs/apiCall.js"
 import { setAuthToken } from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
 
-const SignInSchema = z.object({
-  email: z.string().email("Invalid email format"),
+// Separate schemas for username and email login
+const UsernameSignInSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
+  password: z.string()
+});
+
+const EmailSignInSchema = z.object({
+  email: z.string().email("Invalid email format"),
   password: z.string()
 });
 
 const SignIn = () => {
   const {user} = useStore(state => state)
+  const [loginMethod, setLoginMethod] = useState("username"); // "username" or "email"
+  
   const {
     register,
     handleSubmit,
     formState: {errors},
+    reset
   } = useForm({
-    resolver: zodResolver(SignInSchema),
+    resolver: zodResolver(loginMethod === "username" ? UsernameSignInSchema : EmailSignInSchema),
     mode: "onBlur"
   });
 
@@ -31,6 +39,12 @@ const SignIn = () => {
   const [loading, setLoading] = useState(false)
 
   const { setCredentials } = useStore.getState();
+
+  // Toggle between username and email login
+  const handleLoginMethodToggle = () => {
+    setLoginMethod(prev => prev === "username" ? "email" : "username");
+    reset(); // Clear form when switching
+  };
 
   const onSubmit = async (data) => {
     console.log("Form data being sent:", data);
@@ -86,31 +100,33 @@ const SignIn = () => {
             <p>Sign in to access your dashboard</p>
           </div>
 
-          <div className="text-field">
-            <label htmlFor="email">Email Address</label>
-            <input
-              type="email"
-              id="email"
-              placeholder="doctor@hospital.com"
-              {...register("email")}
-            />
-            {errors.email && (
-              <div className="error-message">{errors.email.message}</div>
-            )}
-          </div>
-
-          <div className="text-field">
-            <label htmlFor="username">Username</label>
-            <input
-              type="text"
-              id="username"
-              placeholder="Enter your username"
-              {...register("username")}
-            />
-            {errors.username && (
-              <div className="error-message">{errors.username.message}</div>
-            )}
-          </div>
+          {loginMethod === "username" ? (
+            <div className="text-field">
+              <label htmlFor="username">Username</label>
+              <input
+                type="text"
+                id="username"
+                placeholder="Enter your username"
+                {...register("username")}
+              />
+              {errors.username && (
+                <div className="error-message">{errors.username.message}</div>
+              )}
+            </div>
+          ) : (
+            <div className="text-field">
+              <label htmlFor="email">Email Address</label>
+              <input
+                type="email"
+                id="email"
+                placeholder="doctor@hospital.com"
+                {...register("email")}
+              />
+              {errors.email && (
+                <div className="error-message">{errors.email.message}</div>
+              )}
+            </div>
+          )}
 
           <div className="text-field">
             <label htmlFor="password">Password</label>
@@ -132,18 +148,38 @@ const SignIn = () => {
           >
             {loading ? "Signing In..." : "Sign In"}
           </button>
+
+          <div style={{ textAlign: "center", marginTop: "1rem" }}>
+            <button
+              type="button"
+              onClick={handleLoginMethodToggle}
+              style={{
+                background: "none",
+                border: "none",
+                color: "#007bff",
+                cursor: "pointer",
+                textDecoration: "underline",
+                fontSize: "0.9rem"
+              }}
+            >
+              {loginMethod === "username" 
+                ? "Sign in with email instead" 
+                : "Sign in with username instead"}
+            </button>
+          </div>
         </form>
       </main>
 
       <aside className="info-side">
         <div className="blockquote-wrapper">
-          <blockquote>
-            "DocuMed has transformed how we manage patient records and streamlined 
-            our hospital operations significantly."
-          </blockquote>
-          <div className="author">
-            <span className="author-name">- Agha Khan Chief of Surgery</span>
-          </div>
+         <section className="about-documed">
+  <p>
+    DocuMed simplifies medical record management, helping healthcare professionals
+    securely access and share patient data for better, faster care.
+  </p>
+</section>
+
+
         </div>
       </aside>
     </div>

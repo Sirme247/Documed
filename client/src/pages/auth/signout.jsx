@@ -36,6 +36,13 @@ const SignOut = () => {
   return (
     <div className="signout-container">
       <div className="signout-card">
+         <button 
+            onClick={handleCancel} 
+            className="btn-cancel"
+            disabled={isLoading}
+          >
+            Cancel
+          </button>
         <div className="signout-icon">
           <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
@@ -43,6 +50,7 @@ const SignOut = () => {
             <line x1="21" y1="12" x2="9" y2="12" />
           </svg>
         </div>
+        
         
         <h2>Sign Out?</h2>
         <p className="signout-message">
@@ -81,13 +89,7 @@ const SignOut = () => {
               'Sign Out'
             )}
           </button>
-          <button 
-            onClick={handleCancel} 
-            className="btn-cancel"
-            disabled={isLoading}
-          >
-            Cancel
-          </button>
+         
         </div>
       </div>
     </div>

@@ -1,53 +1,93 @@
 import {pool} from '../libs/database.js';
 import { logAudit } from "../libs/auditLogger.js";
-
 export const registerVisit = async (req, res)=>{
     try{
         const user_id = req.user.user_id;
 
+        // Sanitize empty strings to null
+        const sanitizedBody = Object.entries(req.body).reduce((acc, [key, value]) => {
+            acc[key] = value === "" ? null : value;
+            return acc;
+        }, {});
 
-        const {visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id,priority_level,referring_provider_name,referring_provider_hospital,reason_for_visit,admission_status,discharge_date,notes} = req.body;
+        // Destructure from sanitizedBody instead of req.body
+        const {
+            visit_number,
+            visit_type,
+            patient_id,
+            provider_id,
+            hospital_id,
+            branch_id,
+            priority_level,
+            referring_provider_name,
+            referring_provider_hospital,
+            reason_for_visit,
+            admission_status,
+            discharge_date,
+            notes
+        } = sanitizedBody;
+
+        // Validate required fields
         if(!visit_number || !visit_type || !patient_id || !hospital_id){
-            return res.status(400).json(
-                {
-                    status: "failed",
-                    message: "Please fill all required fields"
-                }
-            )
+            return res.status(400).json({
+                status: "failed",
+                message: "Please fill all required fields"
+            });
         }
 
-        const visitExist = await pool.query('SELECT * FROM visits WHERE visit_number= $1 AND patient_id = $2' , [visit_number,patient_id]);
+        // Check if visit already exists
+        const visitExist = await pool.query(
+            'SELECT * FROM visits WHERE visit_number = $1 AND patient_id = $2', 
+            [visit_number, patient_id]
+        );
 
-        if( visitExist.rows.length>0){
-            return res.status(400).json(
-                {
-                    status: "failed",
-                    message: "Visit with given visit number already exists"
-                }
-            )
+        if(visitExist.rows.length > 0){
+            return res.status(400).json({
+                status: "failed",
+                message: "Visit with given visit number already exists"
+            });
         }
-        const newVisit = await pool.query( `INSERT INTO visits 
-            (visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id,priority_level,referring_provider_name,referring_provider_hospital,reason_for_visit,admission_status,discharge_date,notes,user_id)
-            VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) 
+
+        // Insert new visit (null values are already handled by sanitizedBody)
+        const newVisit = await pool.query(
+            `INSERT INTO visits 
+            (visit_number, visit_type, patient_id, provider_id, hospital_id, branch_id, 
+             priority_level, referring_provider_name, referring_provider_hospital, 
+             reason_for_visit, admission_status, discharge_date, notes, user_id)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14) 
             RETURNING visit_id`,
             [
-                visit_number,visit_type,patient_id,provider_id,hospital_id,branch_id??null,priority_level,referring_provider_name??null,referring_provider_hospital??null,reason_for_visit,admission_status??null,discharge_date?? null,notes??null, user_id
-            ])
+                visit_number,
+                visit_type,
+                patient_id,
+                provider_id,
+                hospital_id,
+                branch_id,
+                priority_level,
+                referring_provider_name,
+                referring_provider_hospital,
+                reason_for_visit,
+                admission_status,
+                discharge_date,
+                notes,
+                user_id
+            ]
+        );
 
         const visit_id = newVisit.rows[0].visit_id;
 
-        res.status(201).json(
-            {
-                status: "success",
-                message: "Patient visit registered successfully",
-                visit_id
-            }
-        )    
+        res.status(201).json({
+            status: "success",
+            message: "Patient visit registered successfully",
+            visit_id
+        });
 
-
-    }catch(error){
+    } catch(error){
         console.log(error);
-        res.status(500).json({message: "Server error"});
+        res.status(500).json({
+            status: "failed",
+            message: "Server error"
+        });
     }   
 }
 

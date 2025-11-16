@@ -199,21 +199,24 @@ const UserList = () => {
     <div className="user-list-container">
       <div className="user-list-header">
         <h1>User Management</h1>
-        <div>
-           <button 
-          className="btn-primary" 
-          onClick={() => navigate("/users/register-existing-doctor")}
-        >
-          + Register Existing Doctor
-        </button>
-        <button 
-          className="btn-primary" 
-          onClick={() => navigate("/users/register")}
-        >
-          + Register New User
-        </button>
-        </div>
         
+        {/* Only show buttons for Local Admin (role_id === 2) */}
+        {user?.role_id === 2 && (
+          <div>
+            <button 
+              className="btn-add-doctor" 
+              onClick={() => navigate("/users/register-existing-doctor")}
+            >
+              + Register Existing Doctor
+            </button>
+            <button 
+              className="btn-primary" 
+              onClick={() => navigate("/users/register")}
+            >
+              + Register New User
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Filters Section */}
@@ -226,7 +229,7 @@ const UserList = () => {
             onChange={handleSearch}
             className="search-input"
           />
-          <span className="search-icon">🔍</span>
+          {/* <span className="search-icon">🔍</span> */}
         </div>
 
         <div className="filters-row">
@@ -325,9 +328,7 @@ const UserList = () => {
           <table className="users-table">
             <thead>
               <tr>
-                <th onClick={() => handleSort("user_id")} className="sortable">
-                  ID {filters.sort_by === "user_id" && (filters.sort_order === "ASC" ? "↑" : "↓")}
-                </th>
+                <th style={{ width: '60px' }}>#</th>
                 <th onClick={() => handleSort("first_name")} className="sortable">
                   Name {filters.sort_by === "first_name" && (filters.sort_order === "ASC" ? "↑" : "↓")}
                 </th>
@@ -339,23 +340,23 @@ const UserList = () => {
                 </th>
                 <th>Role</th>
                 <th>Hospital</th>
-                <th>Department</th>
+                {/* <th>Department</th> */}
                 {/* <th onClick={() => handleSort("employment_status")} className="sortable">
                   Employment {filters.sort_by === "employment_status" && (filters.sort_order === "ASC" ? "↑" : "↓")}
                 </th> */}
                 <th onClick={() => handleSort("account_status")} className="sortable">
                   Account {filters.sort_by === "account_status" && (filters.sort_order === "ASC" ? "↑" : "↓")}
                 </th>
-                <th onClick={() => handleSort("created_at")} className="sortable">
+                {/* <th onClick={() => handleSort("created_at")} className="sortable">
                   Created {filters.sort_by === "created_at" && (filters.sort_order === "ASC" ? "↑" : "↓")}
-                </th>
+                </th> */}
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {users.map((user) => (
+              {users.map((user, index) => (
                 <tr key={user.user_id}>
-                  <td>{user.user_id}</td>
+                  <td>{(pagination.current_page - 1) * pagination.limit + index + 1}</td>
                   <td>
                     <div className="user-name">
                       {user.first_name} {user.middle_name} {user.last_name}
@@ -368,7 +369,7 @@ const UserList = () => {
                     <span className="role-badge">{user.role_name}</span>
                   </td>
                   <td>{user.hospital_name || "N/A"}</td>
-                  <td>{user.department || "N/A"}</td>
+                  {/* <td>{user.department || "N/A"}</td> */}
                   {/* <td>
                     <span className={getStatusClass(user.employment_status)}>
                       {user.employment_status}
@@ -379,7 +380,7 @@ const UserList = () => {
                       {user.account_status}
                     </span>
                   </td>
-                  <td>{formatDate(user.created_at)}</td>
+                  {/* <td>{formatDate(user.created_at)}</td> */}
                   <td>
                     <div className="action-buttons">
                       <button

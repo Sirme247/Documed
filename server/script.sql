@@ -91,15 +91,12 @@ CREATE TABLE users (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-
-
-
-
 CREATE TABLE healthcare_providers (
     user_id INT UNIQUE NOT NULL REFERENCES users(user_id),
     provider_id SERIAL PRIMARY KEY,
     license_number VARCHAR(100) UNIQUE NOT NULL,
     license_expiry DATE,
+    country VARCHAR(100),
     specialization VARCHAR(100),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP

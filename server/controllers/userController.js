@@ -9,7 +9,6 @@ import { hashedPassword, createJWT, comparePassword } from '../libs/index.js';
 
 const safe = (val) => (val !== undefined ? val : null);
 
-
 export const getUser = async (req, res) => {
   try {
     const user_id = req.user.user_id; 
@@ -68,6 +67,7 @@ export const getUser = async (req, res) => {
            p.license_number,
            p.license_expiry,
            p.specialization,
+           p.country,
            ph.provider_hospital_id,
            ph.hospital_id,
            h.hospital_name,
@@ -94,7 +94,6 @@ export const getUser = async (req, res) => {
 
       if (providerRes.rows.length > 0) {
         const base = providerRes.rows[0]; 
-
 
         const hospitals = [];
         const branches = [];
@@ -135,6 +134,7 @@ export const getUser = async (req, res) => {
           license_number: base.license_number,
           license_expiry: base.license_expiry,
           specialization: base.specialization,
+          country: base.country,
           hospitals,
           branches
         };
@@ -156,6 +156,7 @@ export const getUser = async (req, res) => {
     });
   }
 };
+
 
 export const getAllUsers = async (req, res) => {
   try {
@@ -372,7 +373,7 @@ export const registerUser = async (req, res) => {
       contact_info, address_line, hospital_id, branch_id, email,
       username, role_id, employee_id, license_number,
       license_expiry, department, specialization, start_date,
-      password
+      password, country
     } = req.body;
 
     if (!first_name || !last_name || !date_of_birth || !contact_info ||
@@ -383,10 +384,16 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    if (role_id === 3 && !license_number) {
+    if ((role_id === 3 || role_id === 4) && !license_number) {
       return res.status(400).json({
         status: "failed",
         message: "Provider requires license_number"
+      });
+    }
+     if ((role_id === 3 || role_id === 4) && !country) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Provider user's country"
       });
     }
 
@@ -425,10 +432,10 @@ export const registerUser = async (req, res) => {
       return res.status(400).json({ status: "failed", message: "Username already taken" });
     }
 
-    if (role_id === 3) {
+    if (role_id === 3 || role_id === 4) {
       const providerExist = await client.query(
-        "SELECT 1 FROM healthcare_providers WHERE license_number=$1",
-        [license_number]
+        "SELECT 1 FROM healthcare_providers WHERE license_number=$1 and country=$2",
+        [license_number, country]
       );
       if (providerExist.rows.length > 0) {
         await client.query("ROLLBACK");
@@ -499,10 +506,10 @@ export const registerUser = async (req, res) => {
     if (role_id === 3 || role_id === 4) {
       const newProvider = await client.query(
         `INSERT INTO healthcare_providers (
-            user_id, license_number, license_expiry, specialization
-        ) VALUES ($1, $2, $3, $4)
+            user_id, license_number, license_expiry, specialization,country
+        ) VALUES ($1, $2, $3, $4,$5)
         RETURNING *`,
-        [user.user_id, license_number, license_expiry, specialization]
+        [user.user_id, license_number, license_expiry, specialization,country]
       );
 
       provider = newProvider.rows[0];
@@ -569,13 +576,36 @@ export const registerUser = async (req, res) => {
 // Check if practitioner exists
 export const checkExistingPractitioner = async (req, res) => {
   try {
-    const { license_number, email } = req.query;
+    const { license_number, email, country } = req.query;
 
     if (!license_number && !email) {
       return res.status(400).json({
         status: "failed",
         message: "Please provide license_number or email"
       });
+    }
+
+    // Build query conditions
+    let conditions = [];
+    let params = [];
+    let paramCount = 1;
+
+    if (license_number) {
+      conditions.push(`hp.license_number = $${paramCount}`);
+      params.push(license_number);
+      paramCount++;
+    }
+
+    if (email) {
+      conditions.push(`u.email = $${paramCount}`);
+      params.push(email);
+      paramCount++;
+    }
+
+    if (country && license_number) {
+      conditions.push(`hp.country = $${paramCount}`);
+      params.push(country);
+      paramCount++;
     }
 
     const query = `
@@ -587,6 +617,7 @@ export const checkExistingPractitioner = async (req, res) => {
         u.role_id,
         hp.license_number,
         hp.specialization,
+        hp.country,
         json_agg(
           json_build_object(
             'hospital_id', h.hospital_id,
@@ -601,11 +632,11 @@ export const checkExistingPractitioner = async (req, res) => {
       LEFT JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
       LEFT JOIN hospitals h ON ph.hospital_id = h.hospital_id
       LEFT JOIN branches b ON ph.branch_id = b.branch_id
-      WHERE hp.license_number = $1 OR u.email = $2
-      GROUP BY u.user_id, hp.license_number, hp.specialization
+      WHERE ${conditions.join(' OR ')}
+      GROUP BY u.user_id, hp.license_number, hp.specialization, hp.country
     `;
 
-    const result = await pool.query(query, [license_number, email]);
+    const result = await pool.query(query, params);
 
     if (result.rows.length > 0) {
       return res.status(200).json({
@@ -632,13 +663,36 @@ export const checkExistingPractitioner = async (req, res) => {
 // Search doctor
 export const searchDoctor = async (req, res) => {
   try {
-    const { user_id, license_number } = req.query;
+    const { user_id, license_number, country } = req.query;
 
     if (!user_id && !license_number) {
       return res.status(400).json({
         status: "failed",
         message: "Please provide user_id or license_number"
       });
+    }
+
+    // Build conditions
+    let conditions = [];
+    let params = [];
+    let paramCount = 1;
+
+    if (user_id) {
+      conditions.push(`u.user_id = $${paramCount}`);
+      params.push(user_id);
+      paramCount++;
+    }
+
+    if (license_number) {
+      conditions.push(`hp.license_number = $${paramCount}`);
+      params.push(license_number);
+      paramCount++;
+    }
+
+    if (country && license_number) {
+      conditions.push(`hp.country = $${paramCount}`);
+      params.push(country);
+      paramCount++;
     }
 
     const query = `
@@ -650,6 +704,7 @@ export const searchDoctor = async (req, res) => {
         u.role_id,
         hp.license_number,
         hp.specialization,
+        hp.country,
         json_agg(
           json_build_object(
             'hospital_id', h.hospital_id,
@@ -664,11 +719,11 @@ export const searchDoctor = async (req, res) => {
       LEFT JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
       LEFT JOIN hospitals h ON ph.hospital_id = h.hospital_id
       LEFT JOIN branches b ON ph.branch_id = b.branch_id
-      WHERE u.user_id = $1 OR hp.license_number = $2
-      GROUP BY u.user_id, hp.license_number, hp.specialization
+      WHERE ${conditions.join(' AND ')}
+      GROUP BY u.user_id, hp.license_number, hp.specialization, hp.country
     `;
 
-    const result = await pool.query(query, [user_id || null, license_number || null]);
+    const result = await pool.query(query, params);
 
     if (result.rows.length === 0) {
       return res.status(404).json({
@@ -953,6 +1008,7 @@ export const adminUpdateUser = async (req, res) => {
       license_number,
       license_expiry,
       specialization,
+      country  // NEW FIELD
     } = req.body;
 
     await client.query("BEGIN");
@@ -1039,7 +1095,7 @@ export const adminUpdateUser = async (req, res) => {
 
     let provider = null;
 
-    if (user.role_id === 3) {
+    if (user.role_id === 3 || user.role_id === 4) {
       const providerExists = await client.query(
         "SELECT * FROM healthcare_providers WHERE user_id = $1",
         [user_id]
@@ -1059,24 +1115,24 @@ export const adminUpdateUser = async (req, res) => {
             license_number = COALESCE($1, license_number),
             license_expiry = COALESCE($2, license_expiry),
             specialization = COALESCE($3, specialization),
+            country = COALESCE($4, country),
             updated_at = CURRENT_TIMESTAMP
-         WHERE user_id = $4
-         RETURNING provider_id, license_number, license_expiry, specialization`,
-        [safe(license_number), safe(license_expiry), safe(specialization), user_id]
+         WHERE user_id = $5
+         RETURNING provider_id, license_number, license_expiry, specialization, country`,
+        [safe(license_number), safe(license_expiry), safe(specialization), safe(country), user_id]
       );
 
       provider = updatedProvider.rows[0];
     }
 
     await client.query(
-      `INSERT INTO audit_logs (user_id, action, entity, entity_id, description, timestamp)
-       VALUES ($1, $2, $3, $4, $5, NOW())`,
+      `INSERT INTO audit_logs (user_id, action_type, table_name, event_type, timestamp)
+       VALUES ($1, $2, $3, $4, NOW())`,
       [
         req.user.user_id, 
         "ADMIN_UPDATE_USER",
         "users",
-        user_id, 
-        `Admin (ID: ${req.user.user_id}) updated user profile (ID: ${user_id}).`,
+        "UPDATE",
       ]
     );
 
@@ -1376,7 +1432,6 @@ export const deleteUser = async (req, res) => {
   }
 };
 
-
 export const getUserDetails = async (req, res) => {
   try {
     const { user_id } = req.params;
@@ -1388,7 +1443,7 @@ export const getUserDetails = async (req, res) => {
       });
     }
 
-    // Authorization check - Admin can view all, Local Admin can view their hospital users
+    // Authorization check
     if (req.user.role_id === 2) {
       const userHospitalCheck = await pool.query(
         `SELECT u.user_id, u.hospital_id, u.role_id
@@ -1406,7 +1461,6 @@ export const getUserDetails = async (req, res) => {
 
       const targetUser = userHospitalCheck.rows[0];
 
-      // If target is a doctor, check if they're linked to admin's hospital
       if (targetUser.role_id === 3) {
         const providerCheck = await pool.query(
           `SELECT ph.hospital_id
@@ -1430,7 +1484,6 @@ export const getUserDetails = async (req, res) => {
       }
     }
 
-    // Fetch comprehensive user details
     const result = await pool.query(
       `SELECT 
          u.user_id,
@@ -1488,7 +1541,6 @@ export const getUserDetails = async (req, res) => {
     let provider = null;
     let statistics = null;
 
-    // If user is a healthcare provider (Doctor or Nurse)
     if (user.role_id === 3 || user.role_id === 4) {
       const providerRes = await pool.query(
         `SELECT 
@@ -1496,6 +1548,7 @@ export const getUserDetails = async (req, res) => {
            hp.license_number,
            hp.license_expiry,
            hp.specialization,
+           hp.country,
            hp.created_at AS provider_created_at,
            hp.updated_at AS provider_updated_at
          FROM healthcare_providers hp
@@ -1506,7 +1559,6 @@ export const getUserDetails = async (req, res) => {
       if (providerRes.rows.length > 0) {
         provider = providerRes.rows[0];
 
-        // Get all hospitals/branches this provider is linked to
         const providerHospitalsRes = await pool.query(
           `SELECT 
              ph.provider_hospital_id,
@@ -1536,7 +1588,6 @@ export const getUserDetails = async (req, res) => {
         provider.hospitals = providerHospitalsRes.rows.filter(row => row.hospital_id);
         provider.branches = providerHospitalsRes.rows.filter(row => row.branch_id);
 
-        // Get provider statistics
         const statsRes = await pool.query(
           `SELECT 
              COUNT(DISTINCT v.visit_id) as total_visits,
@@ -1559,12 +1610,10 @@ export const getUserDetails = async (req, res) => {
       }
     }
 
-    // Get activity statistics for all users
     if (!statistics) {
       statistics = {};
     }
 
-    // Get recent audit logs for this user
     const auditLogsRes = await pool.query(
       `SELECT 
          al.log_id,
@@ -1642,10 +1691,8 @@ export const getHospitalUsers = async (req,res) =>{
   }
 }
 
-
 export const getUserProfile = async (req, res) => {
   try {
-    
     const user_id = req.user.user_id;
 
     if (!user_id) {
@@ -1655,9 +1702,6 @@ export const getUserProfile = async (req, res) => {
       });
     }
 
-  
-
-    // Fetch comprehensive user details
     const result = await pool.query(
       `SELECT 
          u.user_id,
@@ -1715,7 +1759,6 @@ export const getUserProfile = async (req, res) => {
     let provider = null;
     let statistics = null;
 
-    // If user is a healthcare provider (Doctor or Nurse)
     if (user.role_id === 3 || user.role_id === 4) {
       const providerRes = await pool.query(
         `SELECT 
@@ -1723,6 +1766,7 @@ export const getUserProfile = async (req, res) => {
            hp.license_number,
            hp.license_expiry,
            hp.specialization,
+           hp.country,
            hp.created_at AS provider_created_at,
            hp.updated_at AS provider_updated_at
          FROM healthcare_providers hp
@@ -1733,7 +1777,6 @@ export const getUserProfile = async (req, res) => {
       if (providerRes.rows.length > 0) {
         provider = providerRes.rows[0];
 
-        // Get all hospitals/branches this provider is linked to
         const providerHospitalsRes = await pool.query(
           `SELECT 
              ph.provider_hospital_id,
@@ -1763,7 +1806,6 @@ export const getUserProfile = async (req, res) => {
         provider.hospitals = providerHospitalsRes.rows.filter(row => row.hospital_id);
         provider.branches = providerHospitalsRes.rows.filter(row => row.branch_id);
 
-        // Get provider statistics
         const statsRes = await pool.query(
           `SELECT 
              COUNT(DISTINCT v.visit_id) as total_visits,
@@ -1786,12 +1828,10 @@ export const getUserProfile = async (req, res) => {
       }
     }
 
-    // Get activity statistics for all users
     if (!statistics) {
       statistics = {};
     }
 
-    // Get recent audit logs for this user
     const auditLogsRes = await pool.query(
       `SELECT 
          al.log_id,
@@ -1812,7 +1852,7 @@ export const getUserProfile = async (req, res) => {
 
     res.status(200).json({
       status: "success",
-      message: "User details fetched successfully",
+      message: "User profile fetched successfully",
       data: {
         user,
         provider,
@@ -1822,10 +1862,10 @@ export const getUserProfile = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("getUserDetails error:", error);
+    console.error("getUserProfile error:", error);
     res.status(500).json({
       status: "failed",
-      message: "Server error while fetching user details"
+      message: "Server error while fetching user profile"
     });
   }
 };

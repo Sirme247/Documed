@@ -3,7 +3,7 @@ import {registerPatient,addAllergies,addMedication,
     addChronicConditions,addFamilyHistory,addSocialHistory,updatePatient,updateSocialHistory,  
       updateAllergy,updateMedication,updateChronicCondition,updateFamilyHistory,getPatientFullProfile, deletePatient
     ,getPatients,getPatientById, searchPatientsInTheWeek, getFrequentlyCheckedPatientsThirtyDays, getAdmittedPatients,
-  dischargePatient} 
+  dischargePatient, deleteAllergy,deleteChronicCondition,deleteFamilyHistory,deleteMedication} 
     from '../controllers/patientController.js';
 
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
@@ -36,6 +36,13 @@ router.put('/update-medication', updateMedication);
 router.put('/update-chronic-condition', updateChronicCondition);
 router.put('/update-family-history', updateFamilyHistory);
 router.delete('/delete-patient/:patient_id',requireRole(1), deletePatient)
+
+
+router.delete("/delete-allergy", deleteAllergy);
+router.delete("/delete-medication", deleteMedication);
+router.delete("/delete-family-history", deleteFamilyHistory);
+router.delete("/delete-chronic-condition", deleteChronicCondition);
+
 
 
 export default router;

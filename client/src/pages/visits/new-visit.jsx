@@ -193,25 +193,31 @@ const NewVisit = () => {
 
           <div className="form-row">
             <div className="form-group">
-              <label>Patient ID *</label>
-              <input type="number" {...register("patient_id")} placeholder="Enter patient ID" />
-              {errors.patient_id && (
-                <div className="error-message">{errors.patient_id.message}</div>
-              )}
-              {patientInfo && (
-                <div style={{ 
-                  marginTop: '8px', 
-                  padding: '8px 12px', 
-                  backgroundColor: '#d1fae5', 
-                  borderRadius: '4px',
-                  fontSize: '13px',
-                  color: '#065f46'
-                }}>
-                  ✓ Patient: {patientInfo.first_name} {patientInfo.last_name} 
-                  {patientInfo.date_of_birth && ` (Age: ${new Date().getFullYear() - new Date(patientInfo.date_of_birth).getFullYear()})`}
-                </div>
-              )}
-            </div>
+  <label>Patient ID *</label>
+  <input 
+    type="number" 
+    {...register("patient_id")} 
+    placeholder="Enter patient ID"
+    disabled={true}
+    style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+  />
+  {errors.patient_id && (
+    <div className="error-message">{errors.patient_id.message}</div>
+  )}
+  {patientInfo && (
+    <div style={{ 
+      marginTop: '8px', 
+      padding: '8px 12px', 
+      backgroundColor: '#d1fae5', 
+      borderRadius: '4px',
+      fontSize: '13px',
+      color: '#065f46',
+    }}>
+      ✓ Patient: {patientInfo.first_name} {patientInfo.last_name} 
+      {patientInfo.date_of_birth && ` (Age: ${new Date().getFullYear() - new Date(patientInfo.date_of_birth).getFullYear()})`}
+    </div>
+  )}
+</div>
 
             <div className="form-group">
               <label>Provider ID</label>

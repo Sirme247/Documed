@@ -24,7 +24,7 @@ import EditUser from './pages/users/edit-user'
 import UserDetails from './pages/users/user-details'
 import UserList from './pages/users/user-list'
 import UserRegistration from './pages/users/user-registration'
-import PatientVisitList from './pages/visits/patient-visit-list'
+import PatientVisitList from './pages/patients/patient-visit-list.jsx'
 import NewVisit from './pages/visits/new-visit'
 import VisitDetails from './pages/visits/visit_details'
 import HospitalBranchRegistration from './pages/hospitals/hospital-branch-registration.jsx'
@@ -49,9 +49,12 @@ import DoctorSelectHospital from './pages/auth/doctor-select-hospital.jsx'
 import RegisterExistingDoctor from './pages/users/register-existing-doctor.jsx'
 import LastWeekVisits from './pages/visits/last-week-visits.jsx'
 import FrequentPatients from './pages/patients/admitted-patients.jsx'
-import Sidebar from './components/sidebar.jsx' // ✅ Import the sidebar
+
+
+import Sidebar from './components/sidebar.jsx' 
 import Breadcrumb from './components/breadcrumb.jsx'
 import Summary from './pages/patients/summary.jsx'
+import EditMedicals from './pages/patients/edit-medicals.jsx'
 
 import { jwtDecode } from 'jwt-decode'
 import useStore from './store/index.js'
@@ -293,6 +296,7 @@ function App() {
               <Route path="/patients/register" element={<RegisterPatient />} />
 
               <Route path="/profile/user" element={<UserProfile />} />
+              <Route path="/patients/:patient_id/edit-medicals" element={<EditMedicals />} />
               
               <Route path="/patients/list" element={<PatientList />} />
               <Route path="/patients/:patient_id" element={<PatientDetails />} />

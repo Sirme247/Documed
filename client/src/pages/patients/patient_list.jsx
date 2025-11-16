@@ -326,26 +326,21 @@ const PatientList = () => {
           <table className="patients-table">
             <thead>
               <tr>
-                {/* <th>MRN</th> */}
+                <th style={{ width: '60px' }}>#</th>
                 <th>Name</th>
                 <th>Age</th>
                 <th>Gender</th>
                 <th>Blood Type</th>
                 <th>Contact</th>
-                <th>Insurance</th>
                 <th>Medical Flags</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {patients.map((patient) => (
+              {patients.map((patient, index) => (
                 <tr key={patient.patient_id}>
-                  {/* <td>
-                    {patient.identifiers && patient.identifiers.length > 0 
-                      ? patient.identifiers[0].patient_mrn 
-                      : "N/A"}
-                  </td> */}
+                  <td>{(pagination.page - 1) * pagination.limit + index + 1}</td>
                   <td>
                     <div className="patient-name">
                       <strong>
@@ -362,7 +357,6 @@ const PatientList = () => {
                       <div className="email">{patient.email}</div>
                     </div>
                   </td>
-                  <td>{patient.primary_insurance_provider || "None"}</td>
                   <td>
                     <div className="medical-flags">
                       {patient.allergy_count > 0 && (

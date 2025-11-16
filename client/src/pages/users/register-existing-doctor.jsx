@@ -9,8 +9,9 @@ import { toast } from 'react-hot-toast';
 import useStore from '../../store';
 
 const RegisterExistingDoctorSchema = z.object({
-  user_id: z.string().min(1, "User ID is required"),
+  user_id: z.string().optional(),
   license_number: z.string().min(1, "License number is required"),
+  country: z.string().min(1, "Country is required"),
   hospital_id: z.string().optional(),
   branch_id: z.string().optional(),
   start_date: z.string().min(1, "Start date is required"),
@@ -25,8 +26,9 @@ const RegisterExistingDoctor = () => {
   const [searchLoading, setSearchLoading] = useState(false);
   const [doctorInfo, setDoctorInfo] = useState(null);
 
-  // Pre-filled data from navigation (if redirected from user registration)
+  // Pre-filled data from navigation (if redirected from user registration or hospital page)
   const prefilledData = location.state?.doctorData;
+  const prefillData = location.state?.prefillData;
 
   const {
     register,
@@ -41,20 +43,21 @@ const RegisterExistingDoctor = () => {
     defaultValues: {
       user_id: prefilledData?.user_id?.toString() || '',
       license_number: prefilledData?.license_number || '',
-      hospital_id: user?.hospital_id?.toString() || '',
+      country: prefilledData?.country || '',
+      hospital_id: prefillData?.hospital_id?.toString() || user?.hospital_id?.toString() || '',
       branch_id: user?.branch_id?.toString() || '',
       start_date: new Date().toISOString().split('T')[0],
       is_primary: false
     }
   });
 
-  const userId = watch('user_id');
   const licenseNumber = watch('license_number');
+  const country = watch('country');
 
-  // Search for doctor by user_id or license_number
+  // Search for doctor by license_number and country
   const searchDoctor = async () => {
-    if (!userId && !licenseNumber) {
-      toast.error('Please enter User ID or License Number');
+    if (!licenseNumber || !country) {
+      toast.error('Please enter both License Number and Country');
       return;
     }
 
@@ -62,8 +65,8 @@ const RegisterExistingDoctor = () => {
       setSearchLoading(true);
       const { data } = await api.get('/users/search-doctor', {
         params: {
-          user_id: userId,
-          license_number: licenseNumber
+          license_number: licenseNumber,
+          country: country
         }
       });
 
@@ -71,6 +74,7 @@ const RegisterExistingDoctor = () => {
         setDoctorInfo(data.doctor);
         setValue('user_id', data.doctor.user_id.toString());
         setValue('license_number', data.doctor.license_number);
+        setValue('country', data.doctor.country);
         toast.success('Doctor found!');
       }
     } catch (error) {
@@ -100,7 +104,13 @@ const RegisterExistingDoctor = () => {
       const { data: res } = await api.post('/users/register-existing-practitioner', formattedData);
       
       toast.success('Doctor successfully added to your hospital!');
-      navigate('/users/list');
+      
+      // Navigate back to the source page if provided, otherwise to users list
+      if (prefillData?.returnPath) {
+        navigate(prefillData.returnPath);
+      } else {
+        navigate('/users/list');
+      }
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.message || error.message);
@@ -116,13 +126,18 @@ const RegisterExistingDoctor = () => {
           <h2>Register Existing Doctor</h2>
           <p style={{ color: '#6b7280', marginTop: '8px' }}>
             Add an existing healthcare provider to your hospital
+            {prefillData?.sourceName && (
+              <span style={{ display: 'block', color: '#10b981', fontWeight: '500', marginTop: '4px' }}>
+                → {prefillData.sourceName}
+              </span>
+            )}
           </p>
         </div>
         <button 
-          onClick={() => navigate('/users/list')}
+          onClick={() => navigate(prefillData?.returnPath || '/users/list')}
           className="btn-secondary"
         >
-          ← Back to Users
+          ← Back
         </button>
       </div>
 
@@ -144,23 +159,13 @@ const RegisterExistingDoctor = () => {
         {/* Search Section */}
         <div className="form-section">
           <h3>Search Doctor</h3>
+          <p style={{ color: '#6b7280', fontSize: '14px', marginBottom: '16px' }}>
+            Search for an existing doctor using their license number and country of licensure
+          </p>
           
           <div className="form-row">
             <div className="form-group">
-              <label>User ID</label>
-              <input 
-                type="number"
-                {...register('user_id')} 
-                placeholder="Enter user ID"
-                disabled={!!prefilledData}
-              />
-              {errors.user_id && (
-                <div className="error-message">{errors.user_id.message}</div>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label>License Number</label>
+              <label>License Number *</label>
               <input 
                 {...register('license_number')} 
                 placeholder="e.g., MD123456"
@@ -171,16 +176,48 @@ const RegisterExistingDoctor = () => {
               )}
             </div>
 
+            <div className="form-group">
+              <label>Country of Licensure *</label>
+              <select 
+                {...register('country')}
+                disabled={!!prefilledData}
+              >
+                <option value="">Select country</option>
+                <option value="Kenya">Kenya</option>
+                <option value="Uganda">Uganda</option>
+                <option value="Tanzania">Tanzania</option>
+                <option value="Rwanda">Rwanda</option>
+                <option value="Burundi">Burundi</option>
+                <option value="South Sudan">South Sudan</option>
+                <option value="Ethiopia">Ethiopia</option>
+                <option value="Somalia">Somalia</option>
+                <option value="Nigeria">Nigeria</option>
+                <option value="Ghana">Ghana</option>
+                <option value="South Africa">South Africa</option>
+                <option value="Egypt">Egypt</option>
+                <option value="Zimbabwe">Zimbabwe</option>
+                <option value="Zambia">Zambia</option>
+                <option value="Malawi">Malawi</option>
+                <option value="Botswana">Botswana</option>
+                <option value="Namibia">Namibia</option>
+                <option value="Mozambique">Mozambique</option>
+                <option value="Other">Other</option>
+              </select>
+              {errors.country && (
+                <div className="error-message">{errors.country.message}</div>
+              )}
+            </div>
+
             {!prefilledData && (
               <div className="form-group" style={{ alignSelf: 'flex-end' }}>
                 <button
                   type="button"
                   onClick={searchDoctor}
-                  disabled={searchLoading}
+                  disabled={searchLoading || !licenseNumber || !country}
                   className="btn-secondary"
                   style={{ width: '100%' }}
                 >
-                  {searchLoading ? 'Searching...' : '🔍 Search'}
+                  {searchLoading ? 'Searching...' : '🔍 Search Doctor'}
                 </button>
               </div>
             )}
@@ -198,7 +235,7 @@ const RegisterExistingDoctor = () => {
               <h4 style={{ margin: '0 0 12px 0', color: '#166534' }}>
                 ✅ Doctor Found
               </h4>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', fontSize: '14px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', fontSize: '14px' }}>
                 <div>
                   <strong>Name:</strong> Dr. {(doctorInfo || prefilledData)?.first_name} {(doctorInfo || prefilledData)?.last_name}
                 </div>
@@ -209,19 +246,29 @@ const RegisterExistingDoctor = () => {
                   <strong>License:</strong> {(doctorInfo || prefilledData)?.license_number}
                 </div>
                 <div>
+                  <strong>Country:</strong> {(doctorInfo || prefilledData)?.country || 'N/A'}
+                </div>
+                <div>
                   <strong>Specialization:</strong> {(doctorInfo || prefilledData)?.specialization || 'N/A'}
+                </div>
+                <div>
+                  <strong>User ID:</strong> {(doctorInfo || prefilledData)?.user_id}
                 </div>
               </div>
 
-              {(doctorInfo?.current_hospitals || prefilledData?.current_hospitals) && (
+              {(doctorInfo?.current_hospitals || prefilledData?.current_hospitals) && 
+               (doctorInfo?.current_hospitals?.length > 0 || prefilledData?.current_hospitals?.length > 0) && (
                 <div style={{ marginTop: '12px', paddingTop: '12px', borderTop: '1px solid #86efac' }}>
                   <strong style={{ display: 'block', marginBottom: '8px' }}>Currently Registered At:</strong>
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
-                    {(doctorInfo?.current_hospitals || prefilledData?.current_hospitals).map((hosp, idx) => (
-                      <span key={idx} style={{ fontSize: '13px' }}>
-                        • {hosp.hospital_name} {hosp.branch_name ? `- ${hosp.branch_name}` : ''}
-                      </span>
-                    ))}
+                    {(doctorInfo?.current_hospitals || prefilledData?.current_hospitals)
+                      .filter(hosp => hosp.hospital_name) // Only show valid hospitals
+                      .map((hosp, idx) => (
+                        <span key={idx} style={{ fontSize: '13px' }}>
+                          • {hosp.hospital_name} {hosp.branch_name ? `- ${hosp.branch_name}` : ''}
+                          {hosp.is_primary && <span style={{ color: '#059669', marginLeft: '8px' }}>(Primary)</span>}
+                        </span>
+                      ))}
                   </div>
                 </div>
               )}
@@ -239,12 +286,14 @@ const RegisterExistingDoctor = () => {
               <input 
                 type="number"
                 {...register('hospital_id')} 
-                disabled={user?.role_id === 2}
-                style={user?.role_id === 2 ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+                disabled={user?.role_id === 2 || !!prefillData?.hospital_id}
+                style={(user?.role_id === 2 || !!prefillData?.hospital_id) ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
               />
-              {user?.role_id === 2 && (
+              {(user?.role_id === 2 || prefillData?.hospital_id) && (
                 <small style={{ color: '#6b7280', fontSize: '12px' }}>
-                  Auto-filled from your hospital
+                  {prefillData?.hospital_id 
+                    ? `Pre-filled: ${prefillData.sourceName || 'Selected Hospital'}` 
+                    : 'Auto-filled from your hospital'}
                 </small>
               )}
               {errors.hospital_id && (

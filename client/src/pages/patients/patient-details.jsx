@@ -101,6 +101,10 @@ const PatientDetails = () => {
     );
   }
 
+  // Get only the 4 most recent visits
+  const displayedVisits = recentVisits.slice(0, 4);
+  const hasMoreVisits = recentVisits.length > 0;
+
   return (
     <div className="patient-details-container">
       {/* Header */}
@@ -118,7 +122,12 @@ const PatientDetails = () => {
           Patient Summary
         </button>
 
-          <button className="btn-secondary">Edit Patient</button>
+          <button
+           onClick={() => navigate(`/patients/${patient.patient_id}/edit`, { state: { patient } })} 
+           className="btn-secondary"
+          >
+            Edit Patient
+            </button>
           <button 
             onClick={() => navigate("/visits/new", { state: { patient } })} 
             className="btn-primary"
@@ -304,6 +313,12 @@ const PatientDetails = () => {
             {/* Allergies */}
             <div className="info-card">
               <h3>Allergies</h3>
+              <button
+               onClick={() => navigate(`/patients/add-allergy`, { state: { patient } })} 
+           className="btn-secondary"
+              >
+                Add Allergy
+              </button>
               {medicalHistory.allergies.length === 0 ? (
                 <p className="empty-state">No allergies recorded</p>
               ) : (
@@ -332,6 +347,12 @@ const PatientDetails = () => {
             {/* Medications */}
             <div className="info-card">
               <h3>Medications</h3>
+               <button
+               onClick={() => navigate(`/patients/add-medication`, { state: { patient } })} 
+           className="btn-secondary"
+              >
+                Add Medication
+              </button>
               {medicalHistory.medications.length === 0 ? (
                 <p className="empty-state">No medications recorded</p>
               ) : (
@@ -365,6 +386,12 @@ const PatientDetails = () => {
             {/* Chronic Conditions */}
             <div className="info-card">
               <h3>Chronic Conditions</h3>
+               <button
+               onClick={() => navigate(`/patients/add-chronic-conditions`, { state: { patient } })} 
+           className="btn-secondary"
+              >
+                Add Chronic Condition
+              </button>
               {medicalHistory.chronic_conditions.length === 0 ? (
                 <p className="empty-state">No chronic conditions recorded</p>
               ) : (
@@ -408,6 +435,12 @@ const PatientDetails = () => {
             {/* Family History */}
             <div className="info-card">
               <h3>Family History</h3>
+               <button
+               onClick={() => navigate(`/patients/add-family-history`, { state: { patient } })} 
+           className="btn-secondary"
+              >
+                Add Family History
+              </button>
               {medicalHistory.family_history.length === 0 ? (
                 <p className="empty-state">No family history recorded</p>
               ) : (
@@ -438,6 +471,12 @@ const PatientDetails = () => {
             {/* Social History */}
             <div className="info-card">
               <h3>Social History</h3>
+               <button
+               onClick={() => navigate(`/patients/add-social-history`, { state: { patient } })} 
+           className="btn-secondary"
+              >
+                Add Social History
+              </button>
               {!medicalHistory.social_history ? (
                 <p className="empty-state">No social history recorded</p>
               ) : (
@@ -479,40 +518,62 @@ const PatientDetails = () => {
         {/* Visits Tab */}
         {activeTab === "visits" && (
           <div className="info-card">
-            <h3>Recent Visits</h3>
-            {recentVisits.length === 0 ? (
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
+              <h3>Recent Visits</h3>
+              {hasMoreVisits && (
+                <button
+                  onClick={() => navigate(`/visits/patients/${patient_id}`)}
+                  className="btn-primary"
+                >
+                  View All Visits ({recentVisits.length})
+                </button>
+              )}
+            </div>
+            {displayedVisits.length === 0 ? (
               <p className="empty-state">No visits recorded</p>
             ) : (
-              <div className="visits-list">
-                {recentVisits.map((visit) => (
-                  <div key={visit.visit_id} className="visit-item">
-                    <div className="visit-header">
-                      <div>
-                        <strong>{visit.visit_number}</strong>
-                        <span className="visit-type">{visit.visit_type}</span>
-                      </div>
-                      <span className={`priority-badge ${visit.priority_level}`}>
-                        {visit.priority_level}
-                      </span>
-                    </div>
-                    <p className="visit-date">{formatDateTime(visit.visit_date)}</p>
-                    {visit.reason_for_visit && (
-                      <p className="visit-reason"><strong>Reason:</strong> {visit.reason_for_visit}</p>
-                    )}
-                    <div className="visit-status">
-                      <span className="admission-status">{visit.admission_status}</span>
-                      {visit.discharge_date && (
-                        <span className="discharge-date">
-                          Discharged: {formatDateTime(visit.discharge_date)}
+              <>
+                <div className="visits-list">
+                  {displayedVisits.map((visit) => (
+                    <div key={visit.visit_id} className="visit-item">
+                      <div className="visit-header">
+                        <div>
+                          <strong>{visit.visit_number}</strong>
+                          <span className="visit-type">{visit.visit_type}</span>
+                        </div>
+                        <span className={`priority-badge ${visit.priority_level}`}>
+                          {visit.priority_level}
                         </span>
+                      </div>
+                      <p className="visit-date">{formatDateTime(visit.visit_date)}</p>
+                      {visit.reason_for_visit && (
+                        <p className="visit-reason"><strong>Reason:</strong> {visit.reason_for_visit}</p>
                       )}
+                      <div className="visit-status">
+                        <span className="admission-status">{visit.admission_status}</span>
+                        {visit.discharge_date && (
+                          <span className="discharge-date">
+                            Discharged: {formatDateTime(visit.discharge_date)}
+                          </span>
+                        )}
+                      </div>
+                      <button
+                       onClick={() => navigate(`/visits/details/${visit.visit_id}`)}
+                       className="btn-view-visit">View Full Visit</button>
                     </div>
+                  ))}
+                </div>
+                {/* {hasMoreVisits && (
+                  <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
                     <button
-                     onClick={() => navigate(`/visits/details/${visit.visit_id}`)}
-                     className="btn-view-visit">View Full Visit</button>
+                      onClick={() => navigate(`/visits/patients/${patient_id}`)}
+                      className="btn-primary"
+                    >
+                      View All Visits ({recentVisits.length})
+                    </button>
                   </div>
-                ))}
-              </div>
+                )} */}
+              </>
             )}
           </div>
         )}

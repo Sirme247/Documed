@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import "./patients.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -16,12 +17,16 @@ const AllergySchema = z.object({
 
 const AddAllergy = () => {
   const [loading, setLoading] = useState(false);
+  const location = useLocation();
+  const navigate = useNavigate();
+  const patient_id = location.state?.patient_id;
 
   const {
     register,
     handleSubmit,
     formState: { errors },
     reset,
+    setValue,
   } = useForm({
     resolver: zodResolver(AllergySchema),
     mode: "onBlur",
@@ -30,6 +35,12 @@ const AddAllergy = () => {
       verified: false
     }
   });
+
+  useEffect(() => {
+    if (patient_id) {
+      setValue("patient_id", patient_id.toString());
+    }
+  }, [patient_id, setValue]);
 
   const onSubmit = async (data) => {
     console.log("Form data being sent:", data);
@@ -45,12 +56,26 @@ const AddAllergy = () => {
       const { data: res } = await api.post("/patients/add-allergy", formattedData);
 
       toast.success(res.message || "Allergy recorded successfully!");
-      reset();
+      
+      // Navigate back to the patient's medical records page
+      if (patient_id) {
+        navigate(`/patients/edit-medicals/${patient_id}`);
+      } else {
+        reset();
+      }
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.message || error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleCancel = () => {
+    if (patient_id) {
+      navigate(`/patients/${patient_id}/edit`);
+    } else {
+      navigate(-1);
     }
   };
 
@@ -64,7 +89,12 @@ const AddAllergy = () => {
           
           <div className="form-group">
             <label>Patient ID *</label>
-            <input type="number" {...register("patient_id")} />
+            <input 
+              type="number" 
+              {...register("patient_id")} 
+              disabled={!!patient_id}
+              style={patient_id ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+            />
             {errors.patient_id && (
               <div className="error-message">{errors.patient_id.message}</div>
             )}
@@ -111,9 +141,14 @@ const AddAllergy = () => {
           </div>
         </div>
 
-        <button type="submit" className="submit-btn" disabled={loading}>
-          {loading ? "Adding..." : "Add Allergy"}
-        </button>
+        <div style={{ display: 'flex', gap: '1rem' }}>
+          <button type="button" onClick={handleCancel} className="cancel-btn" disabled={loading}>
+            Cancel
+          </button>
+          <button type="submit" className="submit-btn" disabled={loading}>
+            {loading ? "Adding..." : "Add Allergy"}
+          </button>
+        </div>
       </form>
     </div>
   );

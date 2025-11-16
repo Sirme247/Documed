@@ -1,5 +1,5 @@
 .user-list-container {
-  max-width: 95vw;
+  max-width: 94vw;
   margin: 0 auto;
   padding: 24px;
 }
@@ -16,6 +16,22 @@
   font-weight: 600;
   color: #1f2937;
   margin: 0;
+}
+.btn-add-doctor {
+  background: #10b981;
+  color: white;
+  padding: 12px 20px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  margin-right: 1rem;
+  transition: background-color 0.2s;
+}
+
+.btn-add-doctor:hover {
+  background: #059669;
 }
 
 .btn-primary {
@@ -182,7 +198,7 @@
 }
 
 .users-table {
-  width: 90vw;
+  width: 95%;
   border-collapse: collapse;
   font-size: 14px;
 }

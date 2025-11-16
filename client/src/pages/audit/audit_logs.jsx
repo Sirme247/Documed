@@ -28,6 +28,19 @@ const AuditLogs = () => {
 
   const [showFilters, setShowFilters] = useState(false);
   const [selectedLog, setSelectedLog] = useState(null);
+  // Add this useEffect in your AuditLogs component
+useEffect(() => {
+  if (selectedLog) {
+    document.body.classList.add('modal-open');
+  } else {
+    document.body.classList.remove('modal-open');
+  }
+  
+  // Cleanup on unmount
+  return () => {
+    document.body.classList.remove('modal-open');
+  };
+}, [selectedLog]);
 
 
 const fetchAuditLogs = async () => {
@@ -311,7 +324,7 @@ const fetchAuditLogs = async () => {
                       <th>Action</th>
                       <th>Table</th>
                       <th>User</th>
-                      <th>Branch</th>
+                      {/* <th>Branch</th> */}
                       <th>IP Address</th>
                       <th>Actions</th>
                     </tr>
@@ -332,7 +345,7 @@ const fetchAuditLogs = async () => {
                             ? `${log.user_first_name} ${log.user_last_name}`
                             : log.user_email || '-'}
                         </td>
-                        <td>{log.branch_name || '-'}</td>
+                        {/* <td>{log.branch_name || '-'}</td> */}
                         <td className="ip-address">{log.ip_address || '-'}</td>
                         <td>
                           <button onClick={() => setSelectedLog(log)} className="btn-view">

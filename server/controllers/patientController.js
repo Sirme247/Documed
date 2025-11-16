@@ -1,7 +1,12 @@
 import {pool} from '../libs/database.js';
 import { logAudit } from "../libs/auditLogger.js";
 
-const safe = (val) => (val !== undefined ? val : null);
+// const safe = (val) => (val !== undefined ? val : null);
+const safe = (value) => {
+  if (value === "" || value === undefined || value === null) return null;
+  return value;
+};
+
 
 const toNull = (value) => (value === '' ? null : value);
 
@@ -2189,5 +2194,149 @@ export const patientFullData = async (req, res) => {
     });
   } finally {
     client.release();
+  }
+};
+
+export const deleteAllergy = async (req, res) => {
+  try {
+    const { allergy_id } = req.body;
+    if (!allergy_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Missing allergy_id in request body",
+      });
+    }
+
+    const result = await pool.query(
+      "DELETE FROM allergies WHERE allergy_id = $1",
+      [allergy_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Allergy not found",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Allergy deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete allergy error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+export const deleteMedication = async (req, res) => {
+  try {
+    const { medication_id } = req.body;
+    if (!medication_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Missing medication_id in request body",
+      });
+    }
+
+    const result = await pool.query(
+      "DELETE FROM medications WHERE medication_id = $1",
+      [medication_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Medication not found",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Medication deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete medication error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+export const deleteFamilyHistory = async (req, res) => {
+  try {
+    const { family_history_id } = req.body;
+    if (!family_history_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Missing family_history_id in request body",
+      });
+    }
+
+    const result = await pool.query(
+      "DELETE FROM family_history WHERE family_history_id = $1",
+      [family_history_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Family history not found",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Family history deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete family history error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error",
+      error: error.message,
+    });
+  }
+};
+
+export const deleteChronicCondition = async (req, res) => {
+  try {
+    const { condition_id } = req.body;
+    if (!condition_id) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Missing condition_id in request body",
+      });
+    }
+
+    const result = await pool.query(
+      "DELETE FROM chronic_conditions WHERE condition_id = $1",
+      [condition_id]
+    );
+
+    if (result.rowCount === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Condition not found",
+      });
+    }
+
+    res.status(200).json({
+      status: "success",
+      message: "Condition deleted successfully",
+    });
+  } catch (error) {
+    console.error("Delete condition error:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Server error",
+      error: error.message,
+    });
   }
 };

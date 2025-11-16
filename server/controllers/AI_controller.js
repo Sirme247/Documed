@@ -1,11 +1,11 @@
 import { pool } from '../libs/database.js';
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import Groq from "groq-sdk";
 import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize Gemini AI
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+// Initialize Groq AI
+const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export const PatientAISummary = async (req, res) => {
   const client = await pool.connect();
@@ -249,19 +249,30 @@ IMPORTANT GUIDELINES:
 
 Generate the clinical summary now:`;
 
-    // Call Gemini AI
-    const model = genAI.getGenerativeModel({ model: "gemini-2.0-flash-exp" });
+    // Call Groq AI
+    const result = await groq.chat.completions.create({
+      messages: [
+        {
+          role: "system",
+          content: "You are a medical AI assistant creating comprehensive clinical summaries for healthcare providers. Always respond with valid JSON only."
+        },
+        {
+          role: "user",
+          content: prompt
+        }
+      ],
+      model: "llama-3.3-70b-versatile",
+      response_format: { type: "json_object" },
+      temperature: 0.5,
+      max_tokens: 4096
+    });
+
+    const aiText = result.choices[0].message.content;
     
-    const result = await model.generateContent(prompt);
-    const response = await result.response;
-    const aiText = response.text();
-    
-    // Parse AI response (remove markdown code blocks if present)
+    // Parse AI response
     let aiSummaryContent;
     try {
-      // Remove markdown code blocks if present
-      const cleanJson = aiText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      aiSummaryContent = JSON.parse(cleanJson);
+      aiSummaryContent = JSON.parse(aiText);
     } catch (parseError) {
       console.error("Failed to parse AI response:", aiText);
       throw new Error("AI generated invalid JSON response");
@@ -288,15 +299,17 @@ Generate the clinical summary now:`;
         visits_last_year: visits.rows.length,
         summary_period: '12 months',
         generated_at: new Date().toISOString(),
-        ai_model: "gemini-2.0-flash-exp"
+        ai_model: "llama-3.3-70b-versatile"
       }
     };
 
     res.status(200).json({
+      
       status: "success",
       message: "AI Summary generated successfully",
       data: aiSummary
     });
+    console.log(`Tokens used: ${result.usage.total_tokens}`);
 
   } catch (error) {
     await client.query('ROLLBACK');

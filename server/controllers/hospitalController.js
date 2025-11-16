@@ -204,6 +204,7 @@ export const updateHospital = async (req, res) => {
   const client = await pool.connect();
   try {
     const { hospital_id } = req.body;
+    
     if (!hospital_id) {
       return res.status(400).json({
         status: "failed",

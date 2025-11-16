@@ -160,6 +160,21 @@ const HospitalDetails = () => {
     👤 Add User
   </button>
   <button 
+    onClick={() => navigate('/users/register-existing-doctor', {
+      state: {
+        prefillData: {
+          hospital_id: hospital_id,
+          sourceName: hospital.hospital_name,
+          returnPath: `/hospitals/${hospital_id}`
+        }
+      }
+    })}
+    className="btn-primary"
+    style={{ backgroundColor: '#10b94bff' }}
+  >
+    👤 Add Existing Doctor
+  </button>
+  <button 
     onClick={() => navigate(`/hospitals/${hospital_id}/edit`)}
     className="btn-primary"
   >

@@ -83,7 +83,7 @@ const Sidebar = () => {
         title: 'Users',
         icon: Users,
         submenu: [
-          { title: 'All Users', path: '/users/list' },
+          { title: 'Hospital Users', path: '/users/list' },
           { title: 'Register User', path: '/users/register' },
           { title: 'Register Existing Doctor', path: '/users/register-existing-doctor' }
         ]
@@ -286,11 +286,11 @@ const Sidebar = () => {
           <div className="user-info">
             <div className="user-name">{user?.first_name} {user?.last_name}</div>
             <div className="user-role">
-              {user?.role_id === 1 && 'Global Admin'}
-              {user?.role_id === 2 && 'Local Admin'}
+              {user?.role_id === 1 && 'System Admin'}
+              {user?.role_id === 2 && 'Hospital Admin'}
               {user?.role_id === 3 && 'Medical Practitioner'}
               {user?.role_id === 4 && 'Medical Staff'}
-              {user?.role_id === 5 && 'Receptionist'}
+              {user?.role_id === 5 && 'Non-Medical Staff'}
             </div>
           </div>
         </div>
