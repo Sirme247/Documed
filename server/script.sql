@@ -268,9 +268,22 @@ CREATE TABLE imaging_results (
     visit_id INT REFERENCES visits(visit_id),
     -- ordered_by INT REFERENCES healthcare_providers(provider_id),
     -- performed_by INT REFERENCES healthcare_providers(provider_id),
-    image_url TEXT,
+    -- image_url TEXT,
+    orthanc_study_id VARCHAR(100),
+    orthanc_series_id VARCHAR(100),
+    orthanc_instance_id VARCHAR(100),
+    modality VARCHAR(20),
+    study_description TEXT,
+    series_description TEXT,
+    body_part VARCHAR(100),
+    study_date TIMESTAMP,
+    dicom_metadata JSONB,
+    file_size BIGINT,
+    instance_count INTEGER DEFAULT 1,
+    uploaded_by INT REFERENCES users(user_id)
+
     findings TEXT,
-    reccomendations TEXT, 
+    recommendations TEXT, 
     -- notes TEXT, 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -417,6 +430,16 @@ CREATE TABLE ai_summaries (
     -- review_status VARCHAR(20) DEFAULT 'Pending', -- Pending, Approved, Modified, Rejected
     -- is_current BOOLEAN DEFAULT TRUE
 );
+
+
+CREATE INDEX idx_imaging_orthanc_study ON imaging_results(orthanc_study_id);
+CREATE INDEX idx_imaging_orthanc_series ON imaging_results(orthanc_series_id);
+CREATE INDEX idx_imaging_orthanc_instance ON imaging_results(orthanc_instance_id);
+CREATE INDEX idx_imaging_modality ON imaging_results(modality);
+CREATE INDEX idx_imaging_visit ON imaging_results(visit_id);
+CREATE INDEX idx_imaging_study_date ON imaging_results(study_date);
+
+
 
 
 CREATE INDEX IF NOT EXISTS idx_password_reset_token ON users(password_reset_token);

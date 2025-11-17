@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  orthanc:
+    image: jodogne/orthanc-plugins:1.12.5
+    container_name: orthanc-dicom-server
+    ports:
+      - "8042:8042"
+      - "4242:4242"
+    environment:
+      - STONE_WEB_VIEWER_PLUGIN_ENABLED=true  # Add this
+    volumes:
+      - ./orthanc.json:/etc/orthanc/orthanc.json:ro
+      - orthanc-db:/var/lib/orthanc/db
+      - orthanc-storage:/var/lib/orthanc/storage
+    networks:
+      - hospital-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8042/system"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+volumes:
+  orthanc-db:
+  orthanc-storage:
+
+networks:
+  hospital-network:
+    driver: bridge

@@ -1,0 +1,95 @@
+{
+  "Name": "HospitalOrthancServer",
+  "RemoteAccessAllowed": true,
+  "AuthenticationEnabled": true,
+  "RegisteredUsers": {
+    "admin": "password"
+  },
+  
+  "HttpPort": 8042,
+  "DicomPort": 4242,
+  
+  "StorageDirectory": "/var/lib/orthanc/storage",
+  "IndexDirectory": "/var/lib/orthanc/db",
+  
+  "StorageCompression": true,
+  "MaximumStorageSize": 0,
+  "MaximumPatientCount": 0,
+  
+  "Plugins": [
+    "/usr/local/share/orthanc/plugins"
+  ],
+  
+  "DicomWeb": {
+    "Enable": true,
+    "Root": "/dicom-web/",
+    "EnableWado": true,
+    "WadoRoot": "/wado",
+    "QidoCaseSensitive": false,
+    "Ssl": false,
+    "StowMaxInstances": 10,
+    "StowMaxSize": 500,
+    "Host": "0.0.0.0"
+  },
+  
+  "StoneWebViewer": {
+    "Enable": true,
+    "DateFormat": "DD/MM/YYYY",
+    "OrthancApiRoot": "../",
+    "ShowInfoPanel": true,
+    "ShowDownloadButton": true,
+    "ShowStudyInformationBreadcrumb": true,
+    "ShowSeriesInformationBreadcrumb": true,
+    "EnableOpenInOhifViewer3": true,
+    "EnableOpenInMedDreamViewer": false
+  },
+  
+  "OHIF": {
+    "Enable": true,
+    "RouterBasename": "/ohif/",
+    "DataSource": "dicom-web"
+  },
+  
+  "StableAge": 60,
+  "StrictAetComparison": false,
+  "JobsHistorySize": 100,
+  "SaveJobs": true,
+  
+  "HttpTimeout": 30,
+  "HttpVerbose": false,
+  "HttpThreadsCount": 50,
+  "DicomScuTimeout": 10,
+  
+  "LuaScripts": [],
+  
+  "ConcurrentJobs": 2,
+  
+  "OverwriteInstances": false,
+  
+  "DefaultEncoding": "Latin1",
+  "AcceptedTransferSyntaxes": ["1.2.840.10008.1.*"],
+  
+  "UnknownSopClassAccepted": false,
+  
+  "DicomAssociationCloseDelay": 5,
+  
+  "DicomAlwaysAllowEcho": true,
+  "DicomAlwaysAllowStore": true,
+  "DicomCheckCalledAet": false,
+  
+  "DicomScpTimeout": 30,
+  
+  "RemoteAccessEnabled": true,
+  
+  "JpegQuality": 90,
+  
+  "LogExportedResources": false,
+  "KeepAlive": true,
+  
+  "TcpNoDelay": true,
+  
+  "SslEnabled": false,
+  
+  "ExecuteLuaEnabled": true,
+  "HttpCompressionEnabled": true
+}

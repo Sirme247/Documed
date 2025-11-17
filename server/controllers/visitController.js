@@ -1,5 +1,7 @@
 import {pool} from '../libs/database.js';
 import { logAudit } from "../libs/auditLogger.js";
+import orthancService from '../libs/orthancService.js';
+
 export const registerVisit = async (req, res)=>{
     try{
         const user_id = req.user.user_id;
@@ -357,8 +359,30 @@ export const getVisitDetails = async (req, res) => {
       pool.query("SELECT * FROM treatments WHERE visit_id = $1", [visit_id]),
       pool.query("SELECT * FROM visit_prescriptions WHERE visit_id = $1", [visit_id]),
       pool.query("SELECT * FROM lab_tests WHERE visit_id = $1", [visit_id]),
-      pool.query("SELECT * FROM imaging_results WHERE visit_id = $1", [visit_id]),
+      pool.query("SELECT * FROM imaging_results WHERE visit_id = $1 ORDER BY study_date DESC, created_at DESC", [visit_id]),
     ]);
+
+    // ✅ ADD VIEWER URLS TO IMAGING RESULTS
+    const imagingWithUrls = await Promise.all(
+      imagingResultsResult.rows.map(async (result) => {
+        if (result.orthanc_study_id) {
+          try {
+            return {
+              ...result,
+              viewer_url: await orthancService.getBestViewerUrl(result.orthanc_study_id),
+              all_viewers: await orthancService.getAllViewerUrls(result.orthanc_study_id),
+              preview_url: `/api/medical-imaging/${result.imaging_result_id}/preview`,
+              thumbnail_url: `/api/medical-imaging/${result.imaging_result_id}/thumbnail`,
+              download_url: `/api/medical-imaging/${result.imaging_result_id}/download`
+            };
+          } catch (error) {
+            console.error(`Error getting viewer URLs for imaging ${result.imaging_result_id}:`, error);
+            return result; // Return original if error
+          }
+        }
+        return result;
+      })
+    );
 
     const visitData = {
       ...visitResult.rows[0],
@@ -367,7 +391,7 @@ export const getVisitDetails = async (req, res) => {
       treatments: treatmentsResult.rows,
       prescriptions: prescriptionsResult.rows,
       lab_tests: labTestsResult.rows,
-      imaging_results: imagingResultsResult.rows,
+      imaging_results: imagingWithUrls, // ✅ USE THE VERSION WITH URLS
     };
 
     res.status(200).json({
@@ -377,7 +401,10 @@ export const getVisitDetails = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching visit details:", error);
-    res.status(500).json({ message: "Server error" });
+    res.status(500).json({ 
+      status: "failed",
+      message: "Server error" 
+    });
   }
 };
 
