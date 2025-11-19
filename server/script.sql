@@ -547,3 +547,193 @@ VALUES (
 );
 
 
+
+
+
+
+
+
+-- Drop the old table if you want to start fresh (CAUTION: This deletes data!)
+-- DROP TABLE IF EXISTS imaging_results CASCADE;
+
+-- Create new imaging_studies table (replaces imaging_results)
+CREATE TABLE imaging_studies (
+    imaging_study_id SERIAL PRIMARY KEY,
+    visit_id INT REFERENCES visits(visit_id),
+    
+    -- Orthanc identifiers
+    orthanc_study_id VARCHAR(100) UNIQUE NOT NULL,
+    study_instance_uid VARCHAR(200) UNIQUE,
+    
+    -- Study metadata
+    modality VARCHAR(20),  -- Primary modality (CT, MRI, etc.)
+    study_description TEXT,
+    body_part VARCHAR(100),
+    study_date TIMESTAMP,
+    
+    -- Study statistics
+    series_count INTEGER DEFAULT 0,
+    instance_count INTEGER DEFAULT 0,
+    total_file_size BIGINT DEFAULT 0,
+    
+    -- DICOM metadata (study-level tags)
+    dicom_metadata JSONB,
+    
+    -- Clinical information
+    findings TEXT,
+    recommendations TEXT,
+    
+    -- Audit fields
+    uploaded_by INT REFERENCES users(user_id),
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create imaging_series table (child of studies)
+CREATE TABLE imaging_series (
+    imaging_series_id SERIAL PRIMARY KEY,
+    imaging_study_id INT REFERENCES imaging_studies(imaging_study_id) ON DELETE CASCADE,
+    
+    orthanc_series_id VARCHAR(100) UNIQUE NOT NULL,
+    series_instance_uid VARCHAR(200),
+    
+    series_number INTEGER,
+    series_description TEXT,
+    modality VARCHAR(20),
+    body_part VARCHAR(100),
+    
+    instance_count INTEGER DEFAULT 0,
+    series_file_size BIGINT DEFAULT 0,
+    
+    dicom_metadata JSONB,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create imaging_instances table (child of series)
+CREATE TABLE imaging_instances (
+    imaging_instance_id SERIAL PRIMARY KEY,
+    imaging_series_id INT REFERENCES imaging_series(imaging_series_id) ON DELETE CASCADE,
+    
+    orthanc_instance_id VARCHAR(100) UNIQUE NOT NULL,
+    sop_instance_uid VARCHAR(200),
+    
+    instance_number INTEGER,
+    file_name VARCHAR(500),
+    file_size BIGINT,
+    
+    dicom_metadata JSONB,
+    
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Create indexes for performance
+CREATE INDEX idx_imaging_studies_visit ON imaging_studies(visit_id);
+CREATE INDEX idx_imaging_studies_orthanc_study ON imaging_studies(orthanc_study_id);
+CREATE INDEX idx_imaging_studies_study_uid ON imaging_studies(study_instance_uid);
+CREATE INDEX idx_imaging_studies_modality ON imaging_studies(modality);
+CREATE INDEX idx_imaging_studies_study_date ON imaging_studies(study_date);
+CREATE INDEX idx_imaging_studies_uploaded_by ON imaging_studies(uploaded_by);
+
+CREATE INDEX idx_imaging_series_study ON imaging_series(imaging_study_id);
+CREATE INDEX idx_imaging_series_orthanc ON imaging_series(orthanc_series_id);
+CREATE INDEX idx_imaging_series_modality ON imaging_series(modality);
+
+CREATE INDEX idx_imaging_instances_series ON imaging_instances(imaging_series_id);
+CREATE INDEX idx_imaging_instances_orthanc ON imaging_instances(orthanc_instance_id);
+
+-- Create a view to easily get study summaries
+CREATE OR REPLACE VIEW v_imaging_study_summary AS
+SELECT 
+    s.imaging_study_id,
+    s.visit_id,
+    s.orthanc_study_id,
+    s.study_instance_uid,
+    s.modality,
+    s.study_description,
+    s.body_part,
+    s.study_date,
+    s.series_count,
+    s.instance_count,
+    s.total_file_size,
+    s.findings,
+    s.recommendations,
+    s.uploaded_by,
+    s.created_at,
+    v.visit_number,
+    v.visit_date,
+    v.patient_id,
+    p.first_name,
+    p.last_name,
+    u.first_name as uploaded_by_first_name,
+    u.last_name as uploaded_by_last_name
+FROM imaging_studies s
+LEFT JOIN visits v ON s.visit_id = v.visit_id
+LEFT JOIN patients p ON v.patient_id = p.patient_id
+LEFT JOIN users u ON s.uploaded_by = u.user_id;
+
+-- Trigger to update study statistics when series/instances are added
+CREATE OR REPLACE FUNCTION update_study_statistics()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE imaging_studies
+    SET 
+        series_count = (
+            SELECT COUNT(*) 
+            FROM imaging_series 
+            WHERE imaging_study_id = NEW.imaging_study_id
+        ),
+        instance_count = (
+            SELECT COALESCE(SUM(instance_count), 0)
+            FROM imaging_series
+            WHERE imaging_study_id = NEW.imaging_study_id
+        ),
+        total_file_size = (
+            SELECT COALESCE(SUM(series_file_size), 0)
+            FROM imaging_series
+            WHERE imaging_study_id = NEW.imaging_study_id
+        ),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE imaging_study_id = NEW.imaging_study_id;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_study_stats_on_series
+AFTER INSERT OR UPDATE OR DELETE ON imaging_series
+FOR EACH ROW
+EXECUTE FUNCTION update_study_statistics();
+
+-- Trigger to update series statistics when instances are added
+CREATE OR REPLACE FUNCTION update_series_statistics()
+RETURNS TRIGGER AS $$
+BEGIN
+    UPDATE imaging_series
+    SET 
+        instance_count = (
+            SELECT COUNT(*) 
+            FROM imaging_instances 
+            WHERE imaging_series_id = NEW.imaging_series_id
+        ),
+        series_file_size = (
+            SELECT COALESCE(SUM(file_size), 0)
+            FROM imaging_instances
+            WHERE imaging_series_id = NEW.imaging_series_id
+        )
+    WHERE imaging_series_id = NEW.imaging_series_id;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_update_series_stats_on_instance
+AFTER INSERT OR UPDATE OR DELETE ON imaging_instances
+FOR EACH ROW
+EXECUTE FUNCTION update_series_statistics();
+
+
+
+
+-- TRUNCATE TABLE imaging_studies, imaging_series, imaging_instances
+-- RESTART IDENTITY CASCADE;

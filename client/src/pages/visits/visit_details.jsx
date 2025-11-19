@@ -23,7 +23,7 @@ const VisitDetails = () => {
           setVisitData(data.data);
           // DEBUG: Check imaging data
           console.log("Visit Data:", data.data);
-          console.log("Imaging Results:", data.data.imaging_results);
+          console.log("Imaging Studies:", data.data.imaging_studies);
         }
       } catch (error) {
         console.error(error);
@@ -74,85 +74,83 @@ const VisitDetails = () => {
   };
 
   // Open imaging viewer in new tab
-  const openImagingViewer = (imaging) => {
-    if (!imaging.viewer_url) {
+  const openImagingViewer = (study) => {
+    if (!study.viewer_url) {
       toast.error("Viewer URL not available");
       return;
     }
-    window.open(imaging.viewer_url, '_blank', 'noopener,noreferrer');
+    window.open(study.viewer_url, '_blank', 'noopener,noreferrer');
   };
 
   // Show viewer options if multiple are available
-  // Improved showViewerOptions function with better modal styling
-
-  const showViewerOptions = (imaging) => {
-  if (!imaging.all_viewers || imaging.all_viewers.length === 0) {
-    toast.error("No viewers available");
-    return;
-  }
-
-  if (imaging.all_viewers.length === 1) {
-    window.open(imaging.all_viewers[0].url, '_blank', 'noopener,noreferrer');
-    return;
-  }
-
-  // Create backdrop element
-  const backdrop = document.createElement('div');
-  backdrop.className = 'toast-backdrop';
-  document.body.appendChild(backdrop);
-
-  // Function to close modal instantly
-  const closeModal = (toastId) => {
-    backdrop.remove();
-    toast.remove(toastId); // Use remove instead of dismiss for instant closure
-  };
-
-  // Show custom toast with better positioning
-  const toastId = toast.custom((t) => (
-    <div className="viewer-toast">
-      <h4>Choose a DICOM Viewer</h4>
-      <div className="viewer-options">
-        {imaging.all_viewers.map((viewer) => (
-          <button
-            key={viewer.type}
-            className={`viewer-option-btn ${viewer.primary ? 'primary' : ''}`}
-            onClick={() => {
-              window.open(viewer.url, '_blank', 'noopener,noreferrer');
-              closeModal(t.id);
-            }}
-          >
-            <strong>
-              {viewer.name}
-              {viewer.primary && <span className="badge">Recommended</span>}
-            </strong>
-            <small>{viewer.description || 'Open in this viewer'}</small>
-          </button>
-        ))}
-      </div>
-      <button 
-        onClick={() => closeModal(t.id)} 
-        className="close-toast"
-      >
-        Cancel
-      </button>
-    </div>
-  ), { 
-    duration: Infinity, // Don't auto-dismiss
-    position: 'top-center',
-    style: {
-      position: 'fixed',
-      top: '50%',
-      left: '50%',
-      transform: 'translate(-50%, -50%)',
-      zIndex: 9999,
+  const showViewerOptions = (study) => {
+    if (!study.all_viewers || study.all_viewers.length === 0) {
+      toast.error("No viewers available");
+      return;
     }
-  });
 
-  // Remove backdrop when clicking on it
-  backdrop.onclick = () => {
-    closeModal(toastId);
+    if (study.all_viewers.length === 1) {
+      window.open(study.all_viewers[0].url, '_blank', 'noopener,noreferrer');
+      return;
+    }
+
+    // Create backdrop element
+    const backdrop = document.createElement('div');
+    backdrop.className = 'toast-backdrop';
+    document.body.appendChild(backdrop);
+
+    // Function to close modal instantly
+    const closeModal = (toastId) => {
+      backdrop.remove();
+      toast.remove(toastId);
+    };
+
+    // Show custom toast with better positioning
+    const toastId = toast.custom((t) => (
+      <div className="viewer-toast">
+        <h4>Choose a DICOM Viewer</h4>
+        <div className="viewer-options">
+          {study.all_viewers.map((viewer) => (
+            <button
+              key={viewer.type}
+              className={`viewer-option-btn ${viewer.primary ? 'primary' : ''}`}
+              onClick={() => {
+                window.open(viewer.url, '_blank', 'noopener,noreferrer');
+                closeModal(t.id);
+              }}
+            >
+              <strong>
+                {viewer.name}
+                {viewer.primary && <span className="badge">Recommended</span>}
+              </strong>
+              <small>{viewer.description || 'Open in this viewer'}</small>
+            </button>
+          ))}
+        </div>
+        <button 
+          onClick={() => closeModal(t.id)} 
+          className="close-toast"
+        >
+          Cancel
+        </button>
+      </div>
+    ), { 
+      duration: Infinity,
+      position: 'top-center',
+      style: {
+        position: 'fixed',
+        top: '50%',
+        left: '50%',
+        transform: 'translate(-50%, -50%)',
+        zIndex: 9999,
+      }
+    });
+
+    // Remove backdrop when clicking on it
+    backdrop.onclick = () => {
+      closeModal(toastId);
+    };
   };
-};
 
   if (loading) {
     return (
@@ -378,8 +376,8 @@ const VisitDetails = () => {
                   <div className="stat-label">Lab Tests</div>
                 </div>
                 <div className="stat-item">
-                  <div className="stat-number">{visitData.imaging_results?.length || 0}</div>
-                  <div className="stat-label">Imaging</div>
+                  <div className="stat-number">{visitData.imaging_studies?.length || 0}</div>
+                  <div className="stat-label">Imaging Studies</div>
                 </div>
               </div>
             </div>
@@ -709,107 +707,100 @@ const VisitDetails = () => {
               )}
             </div>
 
-            {/* Imaging Results */}
+            {/* Imaging Studies - UPDATED FOR STUDY-BASED STRUCTURE */}
             <div className="info-card">
               <div className="card-header-with-action">
-                <h3>Imaging Results</h3>
+                <h3>Imaging Studies</h3>
                 <button 
                   className="btn-primary"
                   onClick={() => navigate('/visits/record-imaging-results', { 
                     state: { visit_id, patient_id: visitData.patient_id } 
                   })}
                 >
-                  + Record Imaging
+                  + Upload Study
                 </button>
               </div>
-              {!visitData.imaging_results || visitData.imaging_results.length === 0 ? (
-                <p className="empty-state">No imaging results recorded</p>
+              {!visitData.imaging_studies || visitData.imaging_studies.length === 0 ? (
+                <p className="empty-state">No imaging studies recorded</p>
               ) : (
                 <div className="list-items">
-                  {visitData.imaging_results.map((imaging) => {
-                    // DEBUG: Log each imaging result
-                    console.log("Imaging item:", imaging);
-                    console.log("Has viewer_url:", !!imaging.viewer_url);
-                    console.log("Has all_viewers:", imaging.all_viewers);
+                  {visitData.imaging_studies.map((study) => {
+                    console.log("Imaging study:", study);
                     
                     return (
-                    <div key={imaging.imaging_result_id} className="list-item">
-                      <div className="list-item-header">
-                        <div>
-                          <strong>
-                            {imaging.modality ? `${imaging.modality} Study` : 'Imaging Study'}
-                          </strong>
-                          {imaging.body_part && (
-                            <span className="body-part-tag"> - {imaging.body_part}</span>
-                          )}
+                      <div key={study.imaging_study_id} className="list-item">
+                        <div className="list-item-header">
+                          <div>
+                            <strong>
+                              {study.modality ? `${study.modality} Study` : 'Imaging Study'}
+                            </strong>
+                            {study.body_part && (
+                              <span className="body-part-tag"> - {study.body_part}</span>
+                            )}
+                          </div>
+                          <div className="study-stats">
+                            <span className="stat-badge" title="Number of series in study">
+                              📁 {study.series_count} series
+                            </span>
+                            <span className="stat-badge" title="Total number of images">
+                              🖼️ {study.instance_count} images
+                            </span>
+                          </div>
                         </div>
                         
-                      </div>
-                      
-                      <div className="imaging-metadata">
-                        {imaging.study_description && (
-                          <p><strong>Study:</strong> {imaging.study_description}</p>
-                        )}
-                        {imaging.series_description && (
-                          <p><strong>Series:</strong> {imaging.series_description}</p>
-                        )}
-                        <p><strong>Date:</strong> {formatDateTime(imaging.study_date || imaging.created_at)}</p>
-                      </div>
-
-                      {imaging.findings && (
-                        <div className="findings">
-                          <strong>Findings:</strong>
-                          <p>{imaging.findings}</p>
-                        </div>
-                      )}
-                      {imaging.recommendations && (
-                        <div className="recommendations">
-                          <strong>Recommendations:</strong>
-                          <p>{imaging.recommendations}</p>
-                        </div>
-                      )}
-                      
-                      {/* Fallback for old data structure */}
-                      {imaging.reccomendations && !imaging.recommendations && (
-                        <div className="recommendations">
-                          <strong>Recommendations:</strong>
-                          <p>{imaging.reccomendations}</p>
-                        </div>
-                      )}
-                      
-                      {/* {imaging.image_url && (
-                        <a href={imaging.image_url} target="_blank" rel="noopener noreferrer" className="btn-view-image">
-                          🖼️ View Image
-                        </a>
-                      )} */}
-                      <div className="imaging-actions">
-                          {/* Always show button for testing */}
-                          <button 
-                            onClick={() => {
-                              console.log("Button clicked, imaging data:", imaging);
-                              if (imaging.viewer_url) {
-                                openImagingViewer(imaging);
-                              } else {
-                                toast.error("Viewer URL not available in data");
-                              }
-                            }}
-                            className="btn-view-imaging"
-                            title="Open DICOM Viewer"
-                          >
-                            🖼️ View Images {!imaging.viewer_url && "(No URL)"}
-                          </button>
-                          {imaging.all_viewers && imaging.all_viewers.length > 1 && (
-                            <button 
-                              onClick={() => showViewerOptions(imaging)}
-                              className="btn-viewer-options"
-                              title="Choose Viewer"
-                            >
-                              ⚙️
-                            </button>
+                        <div className="imaging-metadata">
+                          {study.study_description && (
+                            <p><strong>Study:</strong> {study.study_description}</p>
+                          )}
+                          <p><strong>Date:</strong> {formatDateTime(study.study_date || study.created_at)}</p>
+                          {study.total_file_size && (
+                            <p><strong>Size:</strong> {(study.total_file_size / (1024 * 1024)).toFixed(2)} MB</p>
                           )}
                         </div>
-                    </div>
-                  )})}
+
+                        {study.findings && (
+                          <div className="findings">
+                            <strong>Findings:</strong>
+                            <p>{study.findings}</p>
+                          </div>
+                        )}
+                        
+                        {study.recommendations && (
+                          <div className="recommendations">
+                            <strong>Recommendations:</strong>
+                            <p>{study.recommendations}</p>
+                          </div>
+                        )}
+                        
+                        <div className="imaging-actions">
+                          {study.viewer_url ? (
+                            <>
+                              <button 
+                                onClick={() => openImagingViewer(study)}
+                                className="btn-view-imaging"
+                                title="Open DICOM Viewer"
+                              >
+                                🖼️ View Complete Study
+                              </button>
+                              {study.all_viewers && study.all_viewers.length > 1 && (
+                                <button 
+                                  onClick={() => showViewerOptions(study)}
+                                  className="btn-viewer-options"
+                                  title="Choose Viewer"
+                                >
+                                  ⚙️ More Viewers
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            <span className="no-viewer-text">
+                              Viewer not available for this study
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>

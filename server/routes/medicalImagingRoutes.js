@@ -1,87 +1,56 @@
 import express from 'express';
 import { 
   uploadDicomMiddleware,
-  uploadDicomImages,
-  getImagingResult,
-  getVisitImagingResults,
-  getImagingPreview,
-  getImagingThumbnail,
-  downloadDicom,
-  updateImagingResult,
-  deleteImagingResult,
+  uploadDicomStudy,
+  getImagingStudy,
+  getVisitImagingStudies,
   getPatientImagingHistory,
+  updateImagingStudy,
+  deleteImagingStudy,
+  getStudyPreview,
   getOrthancStats
 } from '../controllers/medicalImagingController.js';
-import { authMiddleware, requireRole} from '../middleware/authMiddleware.js';
+import { authMiddleware } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-// Upload DICOM files
-router.post('/upload', 
-  authMiddleware, 
-  requireRole(1, 2, 3, 4, 5), // Admins, Doctors, Nurses
-//   authMiddleware,
-  uploadDicomMiddleware,
-  uploadDicomImages
-);
+// All routes require authentication
+router.use(authMiddleware);
 
-// Get single imaging result
-router.get('/:imaging_result_id', 
-  authMiddleware, 
-  getImagingResult
-);
+// Upload DICOM study (replaces individual image upload)
+router.post('/upload-study', uploadDicomMiddleware, uploadDicomStudy);
 
-// Get all imaging results for a visit
-router.get('/visit/:visit_id', 
-  authMiddleware, 
-  getVisitImagingResults
-);
+// Get specific imaging study details
+router.get('/studies/:imaging_study_id', getImagingStudy);
 
-// Get patient's imaging history
-router.get('/patient/:patient_id/history', 
-  authMiddleware, 
-  getPatientImagingHistory
-);
+// Get all imaging studies for a visit
+router.get('/visits/:visit_id/studies', getVisitImagingStudies);
 
-// Get preview image (PNG)
-router.get('/:imaging_result_id/preview', 
-  authMiddleware, 
-  getImagingPreview
-);
+// Get patient's imaging history (all studies)
+router.get('/patients/:patient_id/studies', getPatientImagingHistory);
 
-// Get thumbnail
-router.get('/:imaging_result_id/thumbnail', 
-  authMiddleware, 
-  getImagingThumbnail
-);
+// Update study (findings/recommendations)
+router.put('/studies/:imaging_study_id', updateImagingStudy);
 
-// Download DICOM file
-router.get('/:imaging_result_id/download', 
-  authMiddleware, 
-  downloadDicom
-);
+// Delete study (cascades to series and instances)
+router.delete('/studies/:imaging_study_id', deleteImagingStudy);
 
-// Update imaging result (findings/recommendations)
-router.put('/:imaging_result_id', 
-  authMiddleware, 
-  requireRole(1, 2, 3), // Admins and Doctors only
-  updateImagingResult
-);
+// Get study preview image (first instance)
+router.get('/studies/:imaging_study_id/preview', getStudyPreview);
 
-// Delete imaging result
-router.delete('/:imaging_result_id', 
-  authMiddleware, 
-  requireRole(1, 2), // Admins only
-  deleteImagingResult
-);
+// Get Orthanc server statistics
+router.get('/orthanc/stats', getOrthancStats);
 
-// Get Orthanc server statistics (Admin only)
-router.get('/orthanc/stats', 
-  authMiddleware, 
-  requireRole(1), 
-  getOrthancStats
-);
+// ===== BACKWARD COMPATIBILITY ROUTES (optional) =====
+// If you want to keep old endpoints working, add aliases:
 
+// Old: /upload -> New: /upload-study
+router.post('/upload', uploadDicomMiddleware, uploadDicomStudy);
 
+// Old: /:imaging_result_id -> New: /studies/:imaging_study_id
+router.get('/:imaging_result_id', async (req, res, next) => {
+  req.params.imaging_study_id = req.params.imaging_result_id;
+  return getImagingStudy(req, res, next);
+});
 
 export default router;

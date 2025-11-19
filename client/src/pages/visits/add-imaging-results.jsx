@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from "react-hot-toast";
 import api from "../../libs/apiCall.js";
 
-const RecordImagingResult = () => {
+const RecordImagingStudy = () => {
   const [loading, setLoading] = useState(false);
   const [files, setFiles] = useState([]);
   const [previewUrls, setPreviewUrls] = useState([]);
@@ -12,6 +12,9 @@ const RecordImagingResult = () => {
   const [bodyPart, setBodyPart] = useState("");
   const [visitId, setVisitId] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [studyInfo, setStudyInfo] = useState(null);
+  
+  const fileInputRef = useRef(null);
   
   const location = useLocation();
   const navigate = useNavigate();
@@ -30,35 +33,54 @@ const RecordImagingResult = () => {
     // Allow DICOM files with or without extensions
     const validFiles = fileArray.filter(file => {
       const ext = file.name.split('.').pop().toLowerCase();
-      // Allow .dcm, .dicom extensions, or files without extensions
       return ext === 'dcm' || ext === 'dicom' || !file.name.includes('.');
     });
 
     if (validFiles.length !== fileArray.length) {
-      toast.error('Only DICOM files (.dcm, .dicom, or no extension) are allowed');
+      toast.error('Some files were skipped (only DICOM files allowed)');
     }
 
     if (validFiles.length === 0) {
+      toast.error('No valid DICOM files found in the selected folder');
       return;
     }
 
-    // Append new files to existing ones (for multiple selections)
-    setFiles(prevFiles => [...prevFiles, ...validFiles]);
+    // Replace existing files (since we're selecting a folder)
+    setFiles(validFiles);
 
     // Create preview placeholders
     const newPreviews = validFiles.map((file, index) => ({
       name: file.name,
       size: (file.size / (1024 * 1024)).toFixed(2) + ' MB',
-      index: files.length + index
+      path: file.webkitRelativePath || file.name,
+      index: index
     }));
     
-    setPreviewUrls(prevPreviews => [...prevPreviews, ...newPreviews]);
+    setPreviewUrls(newPreviews);
 
-    toast.success(`Added ${validFiles.length} file${validFiles.length > 1 ? 's' : ''}`);
+    // Analyze study info
+    const totalSize = validFiles.reduce((sum, f) => sum + f.size, 0);
+    
+    setStudyInfo({
+      fileCount: validFiles.length,
+      totalSize: (totalSize / (1024 * 1024)).toFixed(2),
+      estimatedSeries: Math.ceil(validFiles.length / 10)
+    });
+
+    toast.success(`Loaded ${validFiles.length} DICOM file${validFiles.length > 1 ? 's' : ''} from folder`);
   };
 
   const handleFileChange = (e) => {
-    processFiles(e.target.files);
+    const selectedFiles = e.target.files;
+    if (selectedFiles && selectedFiles.length > 0) {
+      processFiles(selectedFiles);
+    }
+  };
+
+  const handleFolderClick = () => {
+    if (fileInputRef.current) {
+      fileInputRef.current.click();
+    }
   };
 
   const handleDragOver = (e) => {
@@ -80,7 +102,25 @@ const RecordImagingResult = () => {
     
     if (loading) return;
     
-    processFiles(e.dataTransfer.files);
+    const items = e.dataTransfer.items;
+    if (items) {
+      const files = [];
+      
+      // Convert items to files array
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        if (item.kind === 'file') {
+          const file = item.getAsFile();
+          if (file) files.push(file);
+        }
+      }
+      
+      if (files.length > 0) {
+        processFiles(files);
+      }
+    } else if (e.dataTransfer.files) {
+      processFiles(e.dataTransfer.files);
+    }
   };
 
   const removeFile = (indexToRemove) => {
@@ -91,6 +131,10 @@ const RecordImagingResult = () => {
   const clearAllFiles = () => {
     setFiles([]);
     setPreviewUrls([]);
+    setStudyInfo(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -102,7 +146,7 @@ const RecordImagingResult = () => {
     }
 
     if (files.length === 0) {
-      toast.error('Please select at least one DICOM file');
+      toast.error('Please select a folder containing DICOM files');
       return;
     }
 
@@ -114,6 +158,7 @@ const RecordImagingResult = () => {
       formData.append('body_part_override', bodyPart);
     }
 
+    // Append all files - multer.any() will accept them
     files.forEach(file => {
       formData.append('dicomFiles', file);
     });
@@ -121,8 +166,7 @@ const RecordImagingResult = () => {
     try {
       setLoading(true);
       
-      // Using the centralized api instance (automatically includes auth token)
-      const response = await api.post('/medical-imaging/upload', formData, {
+      const response = await api.post('/medical-imaging/upload-study', formData, {
         headers: {
           'Content-Type': 'multipart/form-data'
         }
@@ -131,25 +175,33 @@ const RecordImagingResult = () => {
       const data = response.data;
 
       if (data.status === "success") {
-        toast.success(data.message || 'DICOM images uploaded successfully!');
+        toast.success(data.message || 'DICOM study uploaded successfully!');
         
         if (data.data?.viewer_url) {
-          const openViewer = window.confirm('Would you like to view the images now?');
+          const openViewer = window.confirm(
+            `Study uploaded successfully!\n\n` +
+            `Studies: ${data.data.studies?.length || 0}\n` +
+            `Total files: ${data.data.total_files}\n` +
+            `Size: ${data.data.total_size_mb} MB\n\n` +
+            `Would you like to view the study now?`
+          );
+          
           if (openViewer) {
             window.open(data.data.viewer_url, '_blank');
           }
         }
 
-        if (visit_id_from_state) {
-          navigate(`/visits/${visit_id_from_state}`);
-        } else {
-          setFiles([]);
-          setPreviewUrls([]);
-          setFindings('');
-          setRecommendations('');
-          setBodyPart('');
-          setVisitId('');
-        }
+        setTimeout(() => {
+          if (visit_id_from_state) {
+            navigate(`/visits/${visit_id_from_state}`);
+          } else {
+            clearAllFiles();
+            setFindings('');
+            setRecommendations('');
+            setBodyPart('');
+            setVisitId('');
+          }
+        }, 2000);
       } else {
         toast.error(data.message || 'Upload failed');
       }
@@ -177,10 +229,10 @@ const RecordImagingResult = () => {
       }}>
         <div>
           <h2 style={{ margin: '0 0 8px 0', fontSize: '28px', fontWeight: '600' }}>
-            Upload Medical Images
+            Upload Medical Imaging Study
           </h2>
           <p style={{ margin: 0, color: '#6b7280', fontSize: '14px' }}>
-            Upload DICOM images (CT, MRI, X-Ray, etc.) - Single or Multiple
+            Select a folder containing all DICOM files for a study
           </p>
         </div>
         <button
@@ -235,12 +287,17 @@ const RecordImagingResult = () => {
           </div>
         </div>
 
-        {/* DICOM Upload Section */}
+        {/* DICOM Study Upload Section */}
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
-            <h3 style={{ fontSize: '18px', fontWeight: '600', margin: 0 }}>
-              DICOM Files
-            </h3>
+            <div>
+              <h3 style={{ fontSize: '18px', fontWeight: '600', margin: '0 0 4px 0' }}>
+                DICOM Study Folder
+              </h3>
+              <p style={{ margin: 0, fontSize: '13px', color: '#6b7280' }}>
+                All files in the folder will be grouped as one study
+              </p>
+            </div>
             {files.length > 0 && (
               <button
                 type="button"
@@ -261,6 +318,18 @@ const RecordImagingResult = () => {
             )}
           </div>
 
+          {/* Hidden file input with directory attribute */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleFileChange}
+            disabled={loading}
+            style={{ display: 'none' }}
+            webkitdirectory=""
+            directory=""
+            multiple
+          />
+
           <div 
             style={{
               border: isDragging ? '2px solid #3b82f6' : '2px dashed #d1d5db',
@@ -269,50 +338,63 @@ const RecordImagingResult = () => {
               textAlign: 'center',
               backgroundColor: isDragging ? '#eff6ff' : '#f9fafb',
               marginBottom: '16px',
-              transition: 'all 0.2s'
+              transition: 'all 0.2s',
+              cursor: loading ? 'not-allowed' : 'pointer'
             }}
             onDragOver={handleDragOver}
             onDragLeave={handleDragLeave}
             onDrop={handleDrop}
+            onClick={handleFolderClick}
           >
-            <input
-              type="file"
-              multiple
-              accept=""
-              onChange={handleFileChange}
-              disabled={loading}
-              id="dicom-upload"
-              style={{ display: 'none' }}
-            />
-            <label
-              htmlFor="dicom-upload"
-              style={{
-                cursor: loading ? 'not-allowed' : 'pointer',
-                display: 'inline-block'
-              }}
-            >
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>
-                {isDragging ? '📥' : '📁'}
-              </div>
-              <div style={{ fontSize: '16px', fontWeight: '500', marginBottom: '8px' }}>
-                {isDragging ? 'Drop files here' : 'Click to select files or drag and drop'}
-              </div>
-              <div style={{ fontSize: '14px', color: '#6b7280' }}>
-                Upload single or multiple DICOM files
-              </div>
-              <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>
-                Supported: .dcm, .dicom, or files without extensions (up to 50 files)
-              </div>
-            </label>
+            <div style={{ fontSize: '48px', marginBottom: '12px' }}>
+              {isDragging ? '📥' : '📁'}
+            </div>
+            <div style={{ fontSize: '16px', fontWeight: '500', marginBottom: '8px' }}>
+              {isDragging ? 'Drop folder here' : 'Click to select study folder or drag and drop'}
+            </div>
+            <div style={{ fontSize: '14px', color: '#6b7280' }}>
+              Select a folder containing all DICOM files from the same study
+            </div>
+            <div style={{ fontSize: '12px', color: '#9ca3af', marginTop: '8px' }}>
+              💡 Tip: All files in the folder and subfolders will be included
+            </div>
           </div>
 
-          {/* File Previews */}
+          {/* Study Summary */}
+          {files.length > 0 && (
+            <div style={{
+              padding: '16px',
+              backgroundColor: '#f0f9ff',
+              border: '1px solid #bae6fd',
+              borderRadius: '6px',
+              marginBottom: '16px'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <div>
+                  <div style={{ fontSize: '14px', fontWeight: '600', color: '#0369a1', marginBottom: '4px' }}>
+                    📊 Study Summary
+                  </div>
+                  <div style={{ fontSize: '13px', color: '#0c4a6e' }}>
+                    Total Files: {files.length} | Total Size: {(files.reduce((sum, f) => sum + f.size, 0) / (1024 * 1024)).toFixed(2)} MB
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* File List */}
           {previewUrls.length > 0 && (
             <div style={{ marginTop: '16px' }}>
               <h4 style={{ fontSize: '14px', fontWeight: '600', marginBottom: '12px' }}>
-                Selected Files ({files.length})
+                Files in Study ({files.length})
               </h4>
-              <div style={{ display: 'grid', gap: '8px', maxHeight: '400px', overflowY: 'auto' }}>
+              <div style={{ 
+                display: 'grid', 
+                gap: '8px', 
+                maxHeight: '400px', 
+                overflowY: 'auto',
+                padding: '4px'
+              }}>
                 {previewUrls.map((preview, index) => (
                   <div
                     key={index}
@@ -326,11 +408,17 @@ const RecordImagingResult = () => {
                       borderRadius: '6px'
                     }}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                      <div style={{ fontSize: '24px' }}>🏥</div>
-                      <div>
-                        <div style={{ fontSize: '14px', fontWeight: '500' }}>
-                          {preview.name}
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '12px', flex: 1 }}>
+                      <div style={{ fontSize: '20px' }}>📄</div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{ 
+                          fontSize: '14px', 
+                          fontWeight: '500',
+                          whiteSpace: 'nowrap',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis'
+                        }}>
+                          {preview.path || preview.name}
                         </div>
                         <div style={{ fontSize: '12px', color: '#6b7280' }}>
                           {preview.size}
@@ -339,7 +427,10 @@ const RecordImagingResult = () => {
                     </div>
                     <button
                       type="button"
-                      onClick={() => removeFile(index)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFile(index);
+                      }}
                       style={{
                         padding: '6px 12px',
                         backgroundColor: '#fee2e2',
@@ -348,7 +439,8 @@ const RecordImagingResult = () => {
                         borderRadius: '4px',
                         cursor: 'pointer',
                         fontSize: '12px',
-                        fontWeight: '500'
+                        fontWeight: '500',
+                        flexShrink: 0
                       }}
                     >
                       Remove
@@ -388,7 +480,7 @@ const RecordImagingResult = () => {
             <option value="Other">Other</option>
           </select>
           <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-            Will be extracted from DICOM if not specified
+            Will be extracted from DICOM metadata if not specified
           </small>
         </div>
 
@@ -401,7 +493,7 @@ const RecordImagingResult = () => {
             value={findings}
             onChange={(e) => setFindings(e.target.value)}
             rows="5"
-            placeholder="Enter radiologist's findings and interpretation..."
+            placeholder="Enter radiologist's findings and interpretation for this study..."
             style={{
               width: '100%',
               padding: '10px 12px',
@@ -448,14 +540,15 @@ const RecordImagingResult = () => {
             <div style={{ fontSize: '20px' }}>ℹ️</div>
             <div>
               <div style={{ fontWeight: '600', fontSize: '14px', marginBottom: '4px', color: '#1e40af' }}>
-                About DICOM Upload
+                About Folder Upload
               </div>
               <ul style={{ margin: '8px 0', paddingLeft: '20px', fontSize: '13px', color: '#1e40af' }}>
-                <li>Upload one or multiple DICOM files at once</li>
-                <li>You can add more files before submitting</li>
-                <li>DICOM metadata will be automatically extracted</li>
-                <li>Images will be stored securely in Orthanc server</li>
-                <li>You can view images in the integrated DICOM viewer</li>
+                <li>Select a folder containing DICOM files for a complete study</li>
+                <li>All files in the folder and subfolders will be included</li>
+                <li>Multiple series within a study are automatically organized</li>
+                <li>DICOM metadata is extracted from each file</li>
+                <li>Studies are stored securely in Orthanc PACS server</li>
+                <li>View complete studies in the integrated DICOM viewer</li>
               </ul>
             </div>
           </div>
@@ -478,11 +571,14 @@ const RecordImagingResult = () => {
             transition: 'background-color 0.2s'
           }}
         >
-          {loading ? '⏳ Uploading DICOM Files...' : `📤 Upload ${files.length} File${files.length !== 1 ? 's' : ''}`}
+          {loading 
+            ? '⏳ Uploading Study...' 
+            : `📤 Upload Study (${files.length} file${files.length !== 1 ? 's' : ''})`
+          }
         </button>
       </form>
     </div>
   );
 };
 
-export default RecordImagingResult;
+export default RecordImagingStudy;

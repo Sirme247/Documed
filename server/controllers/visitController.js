@@ -279,6 +279,7 @@ export const RecordLabTests = async (req, res)=>{
     }       
 }
 
+// DEPRECATED: Old imaging results - kept for backward compatibility
 export const recordImagingResults = async (req, res)=>{
     try{
         const{visit_id,image_url,findings,reccomendations}= req.body;
@@ -346,43 +347,51 @@ export const getVisitDetails = async (req, res) => {
       });
     }
 
+    // Query for imaging studies (NEW STRUCTURE)
+    const imagingStudiesResult = await pool.query(
+      `SELECT 
+        s.*,
+        u.first_name as uploaded_by_first_name,
+        u.last_name as uploaded_by_last_name
+       FROM imaging_studies s
+       LEFT JOIN users u ON s.uploaded_by = u.user_id
+       WHERE s.visit_id = $1 
+       ORDER BY s.study_date DESC, s.created_at DESC`,
+      [visit_id]
+    );
+
+    // Add viewer URLs to imaging studies
+    const imagingStudiesWithUrls = await Promise.all(
+      imagingStudiesResult.rows.map(async (study) => {
+        if (study.orthanc_study_id) {
+          try {
+            return {
+              ...study,
+              viewer_url: await orthancService.getBestViewerUrl(study.orthanc_study_id),
+              all_viewers: await orthancService.getAllViewerUrls(study.orthanc_study_id),
+            };
+          } catch (error) {
+            console.error(`Error getting viewer URLs for study ${study.imaging_study_id}:`, error);
+            return study; // Return original if error
+          }
+        }
+        return study;
+      })
+    );
+
     const [
       vitalsResult,
       diagnosesResult,
       treatmentsResult,
       prescriptionsResult,
       labTestsResult,
-      imagingResultsResult,
     ] = await Promise.all([
       pool.query("SELECT * FROM vitals WHERE visit_id = $1", [visit_id]),
       pool.query("SELECT * FROM diagnoses WHERE visit_id = $1", [visit_id]),
       pool.query("SELECT * FROM treatments WHERE visit_id = $1", [visit_id]),
       pool.query("SELECT * FROM visit_prescriptions WHERE visit_id = $1", [visit_id]),
       pool.query("SELECT * FROM lab_tests WHERE visit_id = $1", [visit_id]),
-      pool.query("SELECT * FROM imaging_results WHERE visit_id = $1 ORDER BY study_date DESC, created_at DESC", [visit_id]),
     ]);
-
-    // ✅ ADD VIEWER URLS TO IMAGING RESULTS
-    const imagingWithUrls = await Promise.all(
-      imagingResultsResult.rows.map(async (result) => {
-        if (result.orthanc_study_id) {
-          try {
-            return {
-              ...result,
-              viewer_url: await orthancService.getBestViewerUrl(result.orthanc_study_id),
-              all_viewers: await orthancService.getAllViewerUrls(result.orthanc_study_id),
-              preview_url: `/api/medical-imaging/${result.imaging_result_id}/preview`,
-              thumbnail_url: `/api/medical-imaging/${result.imaging_result_id}/thumbnail`,
-              download_url: `/api/medical-imaging/${result.imaging_result_id}/download`
-            };
-          } catch (error) {
-            console.error(`Error getting viewer URLs for imaging ${result.imaging_result_id}:`, error);
-            return result; // Return original if error
-          }
-        }
-        return result;
-      })
-    );
 
     const visitData = {
       ...visitResult.rows[0],
@@ -391,7 +400,7 @@ export const getVisitDetails = async (req, res) => {
       treatments: treatmentsResult.rows,
       prescriptions: prescriptionsResult.rows,
       lab_tests: labTestsResult.rows,
-      imaging_results: imagingWithUrls, // ✅ USE THE VERSION WITH URLS
+      imaging_studies: imagingStudiesWithUrls, // NEW: imaging_studies instead of imaging_results
     };
 
     res.status(200).json({
@@ -481,14 +490,6 @@ export const deleteVisit = async (req, res) => {
       });
     }
 
-    // 
-    // if (![1, 2, 3].includes(req.user.role_id)) {
-    //   return res.status(403).json({
-    //     status: "failed",
-    //     message: "You are not authorized to delete visits",
-    //   });
-    // }
-
     await client.query("BEGIN");
 
     const visitResult = await client.query(
@@ -514,13 +515,32 @@ export const deleteVisit = async (req, res) => {
       });
     }
 
+    // Get imaging studies to delete from Orthanc
+    const imagingStudies = await client.query(
+      'SELECT orthanc_study_id FROM imaging_studies WHERE visit_id = $1',
+      [visit_id]
+    );
+
+    // Delete from Orthanc server
+    for (const study of imagingStudies.rows) {
+      if (study.orthanc_study_id) {
+        try {
+          await orthancService.deleteStudy(study.orthanc_study_id);
+        } catch (orthancError) {
+          console.error(`Error deleting study ${study.orthanc_study_id} from Orthanc:`, orthancError);
+          // Continue with database deletion even if Orthanc deletion fails
+        }
+      }
+    }
+
+    // Updated tables list - using imaging_studies instead of imaging_results
     const tables = [
       "vitals",
       "diagnoses",
       "treatments",
       "visit_prescriptions",
       "lab_tests",
-      "imaging_results",
+      "imaging_studies", // NEW: This will cascade to series and instances
     ];
 
     for (const table of tables) {
@@ -793,7 +813,7 @@ export const visitsInHospital = async (req, res) => {
     let params;
 
     if (branch_id) {
-      // ✅ User is tied to a specific branch
+      // User is tied to a specific branch
       query = `
         SELECT 
           v.*,
@@ -808,7 +828,7 @@ export const visitsInHospital = async (req, res) => {
       `;
       params = [hospital_id, branch_id];
     } else {
-      // ✅ User is tied to the entire hospital (no branch restriction)
+      // User is tied to the entire hospital (no branch restriction)
       query = `
         SELECT 
           v.*,
