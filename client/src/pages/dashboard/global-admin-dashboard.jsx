@@ -223,9 +223,9 @@ const GlobalAdminDashboard = () => {
             <span className="action-icon">➕</span>
             <span className="action-label">Register Hospital</span>
           </button>
-          <button onClick={() => navigate('/users/register')} className="quick-action-card">
+          <button onClick={() => navigate('/users/list')} className="quick-action-card">
             <span className="action-icon">👤</span>
-            <span className="action-label">Add User</span>
+            <span className="action-label">View Users</span>
           </button>
           {/* <button onClick={() => navigate('/reports')} className="quick-action-card">
             <span className="action-icon">📊</span>

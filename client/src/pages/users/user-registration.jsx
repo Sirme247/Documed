@@ -167,6 +167,29 @@ const UserRegistration = () => {
   const isHospitalIdLocked = !!(prefilledFromNavigation?.hospital_id || (user?.role_id === 2 && user?.hospital_id));
   const isBranchIdLocked = !!(prefilledFromNavigation?.branch_id || (user?.role_id === 2 && user?.branch_id));
 
+  // Determine available roles based on current user's role
+  const getAvailableRoles = () => {
+    if (user?.role_id === 1) {
+      // Global Admin can register any role
+      return [
+        { value: "2", label: "Hospital Admin" },
+       { value: "3", label: "Medical Practitioner(e.g. doctors)" },
+        { value: "4", label: "Medical Staff(e.g Nurses)" },
+        { value: "5", label: "Receptionist" }
+      ];
+    } else if (user?.role_id === 2) {
+      // Local Admin can only register Medical Practitioner, Medical Staff, and Receptionist
+      return [
+        { value: "3", label: "Medical Practitioner(e.g. doctors)" },
+        { value: "4", label: "Medical Staff(e.g Nurses)" },
+        { value: "5", label: "Receptionist" }
+      ];
+    }
+    return [];
+  };
+
+  const availableRoles = getAvailableRoles();
+
   return (
     <div className="user-registration">
       <div className="page-header">
@@ -331,11 +354,11 @@ const UserRegistration = () => {
               <label>Role *</label>
               <select {...register("role_id")}>
                 <option value="">-- Select Role --</option>
-                {user?.role_id === 1 && <option value="1">Global Admin</option>}
-                <option value="2">Local Admin</option>
-                <option value="3">Medical Practitioner</option>
-                <option value="4">Medical Staff</option>
-                <option value="5">Receptionist</option>
+                {availableRoles.map(role => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
               </select>
               {errors.role_id && (
                 <div className="error-message">{errors.role_id.message}</div>

@@ -247,30 +247,26 @@ const VisitsAllHospital = () => {
           <table className="data-table">
             <thead>
               <tr>
-                <th>Visit #</th>
+                <th>#</th>
                 <th>Patient</th>
                 <th>Visit Type</th>
                 <th>Priority</th>
                 <th>Visit Date</th>
                 <th>Reason</th>
-                <th>Admission Status</th>
-                <th>Branch</th>
+               
                 <th>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {filteredVisits.map((visit) => (
+              {filteredVisits.map((visit, index) => (
                 <tr key={visit.visit_id}>
                   <td>
-                    <strong>{visit.visit_number}</strong>
+                    <strong>{index + 1}</strong>
                   </td>
                   <td>
                     <div style={{ fontWeight: '500' }}>
                       {visit.patient_first_name} {visit.patient_last_name}
                     </div>
-                    {/* <div style={{ fontSize: '12px', color: '#6b7280' }}>
-                      ID: {visit.patient_id}
-                    </div> */}
                   </td>
                   <td>
                     <span style={{
@@ -308,22 +304,8 @@ const VisitsAllHospital = () => {
                       {visit.reason_for_visit || <span style={{ color: '#9ca3af' }}>N/A</span>}
                     </div>
                   </td>
-                  <td>
-                    <span 
-                      className={`status-badge ${getAdmissionStatusClass(visit.admission_status)}`}
-                      style={{
-                        padding: '4px 12px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
-                        fontWeight: '500'
-                      }}
-                    >
-                      {visit.admission_status || 'Pending'}
-                    </span>
-                  </td>
-                  <td>
-                    {visit.branch_name || <span style={{ color: '#9ca3af' }}>Main</span>}
-                  </td>
+                  
+                  
                   <td>
                     <button 
                       className="btn-secondary"

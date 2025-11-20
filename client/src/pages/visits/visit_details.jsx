@@ -4,6 +4,8 @@ import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
 import { useParams, useNavigate } from "react-router-dom";
 
+
+
 const VisitDetails = () => {
   const { visit_id } = useParams();
   const navigate = useNavigate();
@@ -11,6 +13,10 @@ const VisitDetails = () => {
   const [loading, setLoading] = useState(true);
   const [visitData, setVisitData] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
+
+  const [selectedLabTest, setSelectedLabTest] = useState(null);
+const [selectedImagingStudy, setSelectedImagingStudy] = useState(null);
+
 
   // Fetch visit details
   useEffect(() => {
@@ -151,6 +157,25 @@ const VisitDetails = () => {
       closeModal(toastId);
     };
   };
+  const viewLabTestPDF = async (testId) => {
+  try {
+    const { data } = await api.get(`/lab-tests/${testId}`);
+    
+    if (data.status === 'success' && data.data.downloadUrl) {
+      // Option 1: Open in new tab (simplest)
+      window.open(data.data.downloadUrl, '_blank', 'noopener,noreferrer');
+      
+      // Option 2: Open in modal (see below for modal implementation)
+      // setPdfUrl(data.data.downloadUrl);
+      // setPdfModalOpen(true);
+    } else {
+      toast.error('PDF not available for this test');
+    }
+  } catch (error) {
+    console.error('Error fetching PDF:', error);
+    toast.error('Failed to load PDF');
+  }
+};
 
   if (loading) {
     return (
@@ -650,162 +675,247 @@ const VisitDetails = () => {
         )}
 
         {/* Lab & Imaging Tab */}
-        {activeTab === "tests" && (
-          <div className="tests-content">
-            {/* Lab Tests */}
-            <div className="info-card">
-              <div className="card-header-with-action">
-                <h3>Laboratory Tests</h3>
-                <button 
-                  className="btn-primary"
-                  onClick={() => navigate('/visits/record-lab-results', { 
-                    state: { visit_id, patient_id: visitData.patient_id } 
-                  })}
-                >
-                  + Record Lab Test
-                </button>
+{activeTab === "tests" && (
+  <div className="tests-content">
+    {/* Lab Tests - Compact View */}
+    <div className="info-card">
+      <div className="card-header-with-action">
+        <h3>Laboratory Tests</h3>
+        <button 
+          className="btn-primary"
+          onClick={() => navigate('/visits/record-lab-results', { 
+            state: { visit_id, patient_id: visitData.patient_id } 
+          })}
+        >
+          + Record Lab Test
+        </button>
+      </div>
+      {!visitData.lab_tests || visitData.lab_tests.length === 0 ? (
+        <p className="empty-state">No lab tests recorded</p>
+      ) : (
+        <div className="compact-list">
+          {visitData.lab_tests.map((test) => (
+            <div 
+              key={test.lab_test_id} 
+              className="compact-item"
+              onClick={() => setSelectedLabTest(test)}
+            >
+              <div className="compact-item-main">
+                <strong>{test.test_name}</strong>
+                <span className="compact-date">{formatDate(test.test_date)}</span>
               </div>
-              {!visitData.lab_tests || visitData.lab_tests.length === 0 ? (
-                <p className="empty-state">No lab tests recorded</p>
-              ) : (
-                <div className="list-items">
-                  {visitData.lab_tests.map((test) => (
-                    <div key={test.lab_test_id} className="list-item">
-                      <div className="list-item-header">
-                        <strong>{test.test_name}</strong>
-                        <span className={`priority-badge ${test.priority?.toLowerCase()}`}>
-                          {test.priority || 'Normal'}
-                        </span>
-                      </div>
-                      <div className="test-details">
-                        {test.test_code && <p><strong>Test Code:</strong> {test.test_code}</p>}
-                        <p><strong>Test Date:</strong> {formatDateTime(test.test_date)}</p>
-                        {test.findings && (
-                          <div className="findings">
-                            <strong>Findings:</strong>
-                            <p>{test.findings}</p>
-                          </div>
-                        )}
-                        {test.recommendations && (
-                          <div className="recommendations">
-                            <strong>Recommendations:</strong>
-                            <p>{test.recommendations}</p>
-                          </div>
-                        )}
-                        {test.pdf_url && (
-                          <a href={test.pdf_url} target="_blank" rel="noopener noreferrer" className="btn-view-pdf">
-                            📄 View Report PDF
-                          </a>
-                        )}
-                      </div>
-                      {test.lab_notes && (
-                        <p className="list-item-notes">{test.lab_notes}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
+              <span className="compact-action">View Details →</span>
             </div>
+          ))}
+        </div>
+      )}
+    </div>
 
-            {/* Imaging Studies - UPDATED FOR STUDY-BASED STRUCTURE */}
-            <div className="info-card">
-              <div className="card-header-with-action">
-                <h3>Imaging Studies</h3>
-                <button 
-                  className="btn-primary"
-                  onClick={() => navigate('/visits/record-imaging-results', { 
-                    state: { visit_id, patient_id: visitData.patient_id } 
-                  })}
-                >
-                  + Upload Study
-                </button>
-              </div>
-              {!visitData.imaging_studies || visitData.imaging_studies.length === 0 ? (
-                <p className="empty-state">No imaging studies recorded</p>
-              ) : (
-                <div className="list-items">
-                  {visitData.imaging_studies.map((study) => {
-                    console.log("Imaging study:", study);
-                    
-                    return (
-                      <div key={study.imaging_study_id} className="list-item">
-                        <div className="list-item-header">
-                          <div>
-                            <strong>
-                              {study.modality ? `${study.modality} Study` : 'Imaging Study'}
-                            </strong>
-                            {study.body_part && (
-                              <span className="body-part-tag"> - {study.body_part}</span>
-                            )}
-                          </div>
-                          <div className="study-stats">
-                            <span className="stat-badge" title="Number of series in study">
-                              📁 {study.series_count} series
-                            </span>
-                            <span className="stat-badge" title="Total number of images">
-                              🖼️ {study.instance_count} images
-                            </span>
-                          </div>
-                        </div>
-                        
-                        <div className="imaging-metadata">
-                          {study.study_description && (
-                            <p><strong>Study:</strong> {study.study_description}</p>
-                          )}
-                          <p><strong>Date:</strong> {formatDateTime(study.study_date || study.created_at)}</p>
-                          {study.total_file_size && (
-                            <p><strong>Size:</strong> {(study.total_file_size / (1024 * 1024)).toFixed(2)} MB</p>
-                          )}
-                        </div>
-
-                        {study.findings && (
-                          <div className="findings">
-                            <strong>Findings:</strong>
-                            <p>{study.findings}</p>
-                          </div>
-                        )}
-                        
-                        {study.recommendations && (
-                          <div className="recommendations">
-                            <strong>Recommendations:</strong>
-                            <p>{study.recommendations}</p>
-                          </div>
-                        )}
-                        
-                        <div className="imaging-actions">
-                          {study.viewer_url ? (
-                            <>
-                              <button 
-                                onClick={() => openImagingViewer(study)}
-                                className="btn-view-imaging"
-                                title="Open DICOM Viewer"
-                              >
-                                🖼️ View Complete Study
-                              </button>
-                              {study.all_viewers && study.all_viewers.length > 1 && (
-                                <button 
-                                  onClick={() => showViewerOptions(study)}
-                                  className="btn-viewer-options"
-                                  title="Choose Viewer"
-                                >
-                                  ⚙️ More Viewers
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            <span className="no-viewer-text">
-                              Viewer not available for this study
-                            </span>
-                          )}
-                        </div>
-                      </div>
-                    );
-                  })}
+    {/* Imaging Studies - Compact View */}
+    <div className="info-card">
+      <div className="card-header-with-action">
+        <h3>Imaging Studies</h3>
+        <button 
+          className="btn-primary"
+          onClick={() => navigate('/visits/record-imaging-results', { 
+            state: { visit_id, patient_id: visitData.patient_id } 
+          })}
+        >
+          + Upload Study
+        </button>
+      </div>
+      {!visitData.imaging_studies || visitData.imaging_studies.length === 0 ? (
+        <p className="empty-state">No imaging studies recorded</p>
+      ) : (
+        <div className="compact-list">
+          {visitData.imaging_studies.map((study) => (
+            <div 
+              key={study.imaging_study_id} 
+              className="compact-item"
+              onClick={() => setSelectedImagingStudy(study)}
+            >
+              <div className="compact-item-main">
+                <strong>
+                  {study.modality ? `${study.modality} Study` : 'Imaging Study'}
+                  {study.body_part && ` - ${study.body_part}`}
+                </strong>
+                <div className="compact-meta">
+                  <span className="compact-date">{formatDate(study.study_date || study.created_at)}</span>
+                  {study.total_file_size && (
+                    <span className="compact-size">
+                      {(study.total_file_size / (1024 * 1024)).toFixed(1)} MB
+                    </span>
+                  )}
                 </div>
-              )}
+              </div>
+              <span className="compact-action">View Details →</span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  </div>
+)}
+
+{/* Lab Test Detail Modal */}
+{selectedLabTest && (
+  <div className="lab-imaging-modal-overlay" onClick={() => setSelectedLabTest(null)}>
+    <div className="lab-imaging-modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="lab-imaging-modal-header">
+        <h2>{selectedLabTest.test_name}</h2>
+        <button 
+          className="lab-imaging-modal-close"
+          onClick={() => setSelectedLabTest(null)}
+        >
+          ×
+        </button>
+      </div>
+      <div className="lab-imaging-modal-body">
+        <div className="lab-imaging-detail-section">
+          <div className="lab-imaging-detail-grid">
+            {selectedLabTest.test_code && (
+              <div className="lab-imaging-detail-item">
+                <label>Test Code</label>
+                <p>{selectedLabTest.test_code}</p>
+              </div>
+            )}
+            <div className="lab-imaging-detail-item">
+              <label>Test Date</label>
+              <p>{formatDateTime(selectedLabTest.test_date)}</p>
+            </div>
+            <div className="lab-imaging-detail-item">
+              <label>Priority</label>
+              <p>
+                <span className={`priority-badge ${selectedLabTest.priority?.toLowerCase()}`}>
+                  {selectedLabTest.priority || 'Normal'}
+                </span>
+              </p>
             </div>
           </div>
+        </div>
+
+        {selectedLabTest.findings && (
+          <div className="lab-imaging-detail-section">
+            <h4>Findings</h4>
+            <p className="lab-imaging-detail-text">{selectedLabTest.findings}</p>
+          </div>
         )}
+
+        {selectedLabTest.recommendations && (
+          <div className="lab-imaging-detail-section">
+            <h4>Recommendations</h4>
+            <p className="lab-imaging-detail-text">{selectedLabTest.recommendations}</p>
+          </div>
+        )}
+
+        {selectedLabTest.lab_notes && (
+          <div className="lab-imaging-detail-section">
+            <h4>Notes</h4>
+            <p className="lab-imaging-detail-text">{selectedLabTest.lab_notes}</p>
+          </div>
+        )}
+
+        {selectedLabTest.pdf_key && (
+          <div className="lab-imaging-modal-actions">
+            <button 
+              onClick={() => viewLabTestPDF(selectedLabTest.lab_test_id)}
+              className="btn-primary"
+            >
+              📄 View Report PDF
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  </div>
+)}
+
+{/* Imaging Study Detail Modal */}
+{selectedImagingStudy && (
+  <div className="lab-imaging-modal-overlay" onClick={() => setSelectedImagingStudy(null)}>
+    <div className="lab-imaging-modal-content" onClick={(e) => e.stopPropagation()}>
+      <div className="lab-imaging-modal-header">
+        <h2>
+          {selectedImagingStudy.modality ? `${selectedImagingStudy.modality} Study` : 'Imaging Study'}
+          {selectedImagingStudy.body_part && ` - ${selectedImagingStudy.body_part}`}
+        </h2>
+        <button 
+          className="lab-imaging-modal-close"
+          onClick={() => setSelectedImagingStudy(null)}
+        >
+          ×
+        </button>
+      </div>
+      <div className="lab-imaging-modal-body">
+        <div className="lab-imaging-detail-section">
+          <div className="lab-imaging-detail-grid">
+            {selectedImagingStudy.study_description && (
+              <div className="lab-imaging-detail-item full-width">
+                <label>Study Description</label>
+                <p>{selectedImagingStudy.study_description}</p>
+              </div>
+            )}
+            <div className="lab-imaging-detail-item">
+              <label>Study Date</label>
+              <p>{formatDateTime(selectedImagingStudy.study_date || selectedImagingStudy.created_at)}</p>
+            </div>
+            <div className="lab-imaging-detail-item">
+              <label>Series Count</label>
+              <p>📁 {selectedImagingStudy.series_count} series</p>
+            </div>
+            <div className="lab-imaging-detail-item">
+              <label>Image Count</label>
+              <p>🖼️ {selectedImagingStudy.instance_count} images</p>
+            </div>
+            {selectedImagingStudy.total_file_size && (
+              <div className="lab-imaging-detail-item">
+                <label>Total Size</label>
+                <p>{(selectedImagingStudy.total_file_size / (1024 * 1024)).toFixed(2)} MB</p>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {selectedImagingStudy.findings && (
+          <div className="lab-imaging-detail-section">
+            <h4>Findings</h4>
+            <p className="lab-imaging-detail-text">{selectedImagingStudy.findings}</p>
+          </div>
+        )}
+
+        {selectedImagingStudy.recommendations && (
+          <div className="lab-imaging-detail-section">
+            <h4>Recommendations</h4>
+            <p className="lab-imaging-detail-text">{selectedImagingStudy.recommendations}</p>
+          </div>
+        )}
+
+        <div className="lab-imaging-modal-actions">
+          {selectedImagingStudy.viewer_url ? (
+            <>
+              <button 
+                onClick={() => openImagingViewer(selectedImagingStudy)}
+                className="btn-primary"
+              >
+                🖼️ View Complete Study
+              </button>
+              {selectedImagingStudy.all_viewers && selectedImagingStudy.all_viewers.length > 1 && (
+                <button 
+                  onClick={() => showViewerOptions(selectedImagingStudy)}
+                  className="btn-secondary"
+                >
+                  ⚙️ More Viewers
+                </button>
+              )}
+            </>
+          ) : (
+            <p className="lab-imaging-no-viewer-text">Viewer not available for this study</p>
+          )}
+        </div>
+      </div>
+    </div>
+  </div>
+)}
       </div>
     </div>
   );

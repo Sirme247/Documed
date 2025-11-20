@@ -12,6 +12,8 @@ import auditRoutes from './auditRoutes.js';
 import adminRoutes from './adminRoutes.js';
 
 import medicalImagingRoutes from './medicalImagingRoutes.js';
+import labTestsRoutes from './labTestsRoutes.js';
+
 import userRoutes from './userRoutes.js';
 
 const router = express.Router();
@@ -25,6 +27,7 @@ router.use('/visits', visitRoutes);
 router.use('/ai', aiRoutes);
 router.use('/audits', auditRoutes);
 // router.use('/export', exportRoutes);
+router.use('/lab-tests', labTestsRoutes);
 router.use('/medical-imaging', medicalImagingRoutes);
 
 export default router;

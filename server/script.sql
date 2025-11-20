@@ -248,18 +248,18 @@ CREATE TABLE visit_prescriptions (
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+
 CREATE TABLE lab_tests (
-    lab_test_id SERIAL PRIMARY KEY,
+    lab_test_id SERIAL PRIMARY KEY,  -- Changed from lab_test_id
     visit_id INT REFERENCES visits(visit_id),
-    -- ordered_by INT REFERENCES healthcare_providers(provider_id),
-    -- order_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     priority VARCHAR(50) DEFAULT 'normal',
     test_code VARCHAR(50),
-    test_name VARCHAR(100),
-    pdf_url TEXT,
+    test_name VARCHAR(100) NOT NULL,
+    pdf_key TEXT,  -- Changed from pdf_url to store S3 keys
     findings TEXT,
-    recommendations TEXT, 
+    recommendations TEXT,
     lab_notes TEXT,
+    created_by INT,  -- Added to match backend
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
