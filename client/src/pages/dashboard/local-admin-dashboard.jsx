@@ -41,7 +41,7 @@ const LocalAdminDashboard = () => {
     try {
       setLoading(true);
       
-      // Fetch statistics, recent data, and today's visits in parallel
+      // Fetch statistics and recent data 
       const [statsRes, branchesRes, usersRes, patientsRes, todayVisitsRes] = await Promise.all([
         api.get('/admin/hospital-statistics'),
         api.get('/hospitals/branches/list?limit=5&sort=created_at&order=DESC'),
@@ -60,7 +60,7 @@ const LocalAdminDashboard = () => {
         patients: patientsRes.data.data?.patients || []
       });
 
-      // Set today's visits from the new endpoint
+      // Set today's visits 
       if (todayVisitsRes.data.status === 'success') {
         setTodayVisits(todayVisitsRes.data.visits || []);
       }
@@ -234,10 +234,10 @@ const LocalAdminDashboard = () => {
             <span className="action-icon">👤</span>
             <span className="action-label">Add Staff Member</span>
           </button>
-          <button onClick={() => navigate('/patients/register')} className="quick-action-card">
+          {/* <button onClick={() => navigate('/patients/register')} className="quick-action-card">
             <span className="action-icon">➕</span>
             <span className="action-label">Register Patient</span>
-          </button>
+          </button> */}
           {/* <button onClick={() => navigate('/visits/new')} className="quick-action-card">
             <span className="action-icon">📋</span>
             <span className="action-label">New Visit</span>

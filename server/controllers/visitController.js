@@ -6,13 +6,13 @@ export const registerVisit = async (req, res)=>{
     try{
         const user_id = req.user.user_id;
 
-        // Sanitize empty strings to null
+       
         const sanitizedBody = Object.entries(req.body).reduce((acc, [key, value]) => {
             acc[key] = value === "" ? null : value;
             return acc;
         }, {});
 
-        // Destructure from sanitizedBody instead of req.body
+        
         const {
             visit_number,
             visit_type,
@@ -50,7 +50,7 @@ export const registerVisit = async (req, res)=>{
             });
         }
 
-        // Insert new visit (null values are already handled by sanitizedBody)
+        // Insert new visit 
         const newVisit = await pool.query(
             `INSERT INTO visits 
             (visit_number, visit_type, patient_id, provider_id, hospital_id, branch_id, 
@@ -859,5 +859,313 @@ export const visitsInHospital = async (req, res) => {
       message: "Server error",
       error: error.message
     });
+  }
+};
+
+import {
+  canEditVisit,
+  canCloseVisit,
+  canAddRecordsToVisit,
+  VISIT_STATUS
+} from '../libs/visitAuth.js';
+
+// Get visit permissions
+export const getVisitPermissions = async (req, res) => {
+  try {
+    const { visit_id } = req.params;
+    const userRoleId = req.user.role_id;
+
+    const visitResult = await pool.query(
+      'SELECT visit_status, hospital_id FROM visits WHERE visit_id = $1',
+      [visit_id]
+    );
+
+    if (visitResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Visit not found"
+      });
+    }
+
+    const visit = visitResult.rows[0];
+
+    // Check hospital access
+    if (visit.hospital_id !== req.user.hospital_id) {
+      return res.status(403).json({
+        status: "failed",
+        message: "Cannot access visits from other hospitals"
+      });
+    }
+
+    const editPerm = canEditVisit(visit, userRoleId);
+    const closePerm = canCloseVisit(visit, userRoleId);
+    const addRecordsPerm = canAddRecordsToVisit(visit, userRoleId);
+
+    res.status(200).json({
+      status: "success",
+      permissions: {
+        visit_status: visit.visit_status,
+        can_edit: editPerm.allowed,
+        edit_reason: editPerm.reason,
+        can_close: closePerm.allowed,
+        close_reason: closePerm.reason,
+        can_add_records: addRecordsPerm.allowed,
+        add_records_reason: addRecordsPerm.reason
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting visit permissions:', error);
+    res.status(500).json({ status: "failed", message: "Server error" });
+  }
+};
+
+// Update visit (with permission check)
+export const updateVisit = async (req, res) => {
+  try {
+    const { visit_id } = req.params;
+    const userRoleId = req.user.role_id;
+    const userHospitalId = req.user.hospital_id;
+
+    // Get visit
+    const visitResult = await pool.query(
+      'SELECT * FROM visits WHERE visit_id = $1',
+      [visit_id]
+    );
+
+    if (visitResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Visit not found"
+      });
+    }
+
+    const visit = visitResult.rows[0];
+
+    // Hospital access check
+    if (visit.hospital_id !== userHospitalId) {
+      return res.status(403).json({
+        status: "failed",
+        message: "Cannot access visits from other hospitals"
+      });
+    }
+
+    // Permission check
+    const editPerm = canEditVisit(visit, userRoleId);
+    if (!editPerm.allowed) {
+      return res.status(403).json({
+        status: "failed",
+        message: editPerm.reason
+      });
+    }
+
+    // Build update query dynamically
+    const updateFields = [];
+    const updateValues = [];
+    let paramCounter = 1;
+
+    // Allowed fields
+    const allowedFields = [
+      'visit_type', 'priority_level', 'reason_for_visit',
+      'referring_provider_name', 'referring_provider_hospital', 'notes'
+    ];
+
+    Object.keys(req.body).forEach(key => {
+      if (allowedFields.includes(key) && req.body[key] !== undefined) {
+        updateFields.push(`${key} = $${paramCounter}`);
+        updateValues.push(req.body[key]);
+        paramCounter++;
+      }
+    });
+
+    if (updateFields.length === 0) {
+      return res.status(400).json({
+        status: "failed",
+        message: "No valid fields to update"
+      });
+    }
+
+    updateFields.push(`updated_at = CURRENT_TIMESTAMP`);
+    updateValues.push(visit_id);
+
+    const updateQuery = `
+      UPDATE visits SET
+        ${updateFields.join(', ')}
+      WHERE visit_id = $${paramCounter}
+      RETURNING *
+    `;
+
+    const result = await pool.query(updateQuery, updateValues);
+
+    // Audit log
+    await logAudit({
+      user_id: req.user.user_id,
+      table_name: 'visits',
+      action_type: 'update_visit',
+      old_values: visit,
+      new_values: result.rows[0],
+      event_type: 'UPDATE',
+      ip_address: req.ip,
+      branch_id: req.user.branch_id,
+      hospital_id: req.user.hospital_id
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: "Visit updated successfully",
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Error updating visit:', error);
+    res.status(500).json({ status: "failed", message: "Server error" });
+  }
+};
+
+// Close visit (only receptionist or admin)
+export const closeVisit = async (req, res) => {
+  try {
+    const { visit_id } = req.params;
+    const userRoleId = req.user.role_id;
+    const userHospitalId = req.user.hospital_id;
+
+    // Get visit
+    const visitResult = await pool.query(
+      'SELECT * FROM visits WHERE visit_id = $1',
+      [visit_id]
+    );
+
+    if (visitResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Visit not found"
+      });
+    }
+
+    const visit = visitResult.rows[0];
+
+    // Hospital access check
+    if (visit.hospital_id !== userHospitalId) {
+      return res.status(403).json({
+        status: "failed",
+        message: "Cannot access visits from other hospitals"
+      });
+    }
+
+    // Permission check
+    const closePerm = canCloseVisit(visit, userRoleId);
+    if (!closePerm.allowed) {
+      return res.status(403).json({
+        status: "failed",
+        message: closePerm.reason,
+        userRole: closePerm.userRole
+      });
+    }
+
+    // Close the visit
+    const result = await pool.query(
+      `UPDATE visits SET 
+        visit_status = $1, 
+        updated_at = CURRENT_TIMESTAMP 
+      WHERE visit_id = $2 
+      RETURNING *`,
+      [VISIT_STATUS.CLOSED, visit_id]
+    );
+
+    // Audit log
+    await logAudit({
+      user_id: req.user.user_id,
+      table_name: 'visits',
+      action_type: 'close_visit',
+      old_values: { visit_status: visit.visit_status },
+      new_values: { visit_status: VISIT_STATUS.CLOSED },
+      event_type: 'UPDATE',
+      ip_address: req.ip,
+      branch_id: req.user.branch_id,
+      hospital_id: req.user.hospital_id
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: "Visit closed successfully",
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Error closing visit:', error);
+    res.status(500).json({ status: "failed", message: "Server error" });
+  }
+};
+
+// Reopen visit (admin only - for corrections)
+export const reopenVisit = async (req, res) => {
+  try {
+    const { visit_id } = req.params;
+    const userRoleId = req.user.role_id;
+    const userHospitalId = req.user.hospital_id;
+
+    // Only admins can reopen
+    if (userRoleId > 2) {
+      return res.status(403).json({
+        status: "failed",
+        message: "Only administrators can reopen visits"
+      });
+    }
+
+    // Get visit
+    const visitResult = await pool.query(
+      'SELECT * FROM visits WHERE visit_id = $1',
+      [visit_id]
+    );
+
+    if (visitResult.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Visit not found"
+      });
+    }
+
+    const visit = visitResult.rows[0];
+
+    // Hospital access check
+    if (visit.hospital_id !== userHospitalId) {
+      return res.status(403).json({
+        status: "failed",
+        message: "Cannot access visits from other hospitals"
+      });
+    }
+
+    // Reopen the visit
+    const result = await pool.query(
+      `UPDATE visits SET 
+        visit_status = $1, 
+        updated_at = CURRENT_TIMESTAMP 
+      WHERE visit_id = $2 
+      RETURNING *`,
+      [VISIT_STATUS.OPEN, visit_id]
+    );
+
+    // Audit log
+    await logAudit({
+      user_id: req.user.user_id,
+      table_name: 'visits',
+      action_type: 'reopen_visit',
+      old_values: { visit_status: visit.visit_status },
+      new_values: { visit_status: VISIT_STATUS.OPEN },
+      event_type: 'UPDATE',
+      ip_address: req.ip,
+      branch_id: req.user.branch_id,
+      hospital_id: req.user.hospital_id
+    });
+
+    res.status(200).json({
+      status: "success",
+      message: "Visit reopened successfully",
+      data: result.rows[0]
+    });
+
+  } catch (error) {
+    console.error('Error reopening visit:', error);
+    res.status(500).json({ status: "failed", message: "Server error" });
   }
 };

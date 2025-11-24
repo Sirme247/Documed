@@ -51,18 +51,17 @@ const Sidebar = () => {
           // { title: 'Register Existing Doctor', path: '/users/register-existing-doctor' }
         // ]
       },
-      {
-        title: 'Patients',
-        icon: UserCheck,
-        submenu: [
-          { title: 'All Patients', path: '/patients/list' },
-          { title: 'Register Patient', path: '/patients/register' },
-        ]
-      },
+      // {
+      //   title: 'Patients',
+      //   icon: UserCheck,
+      //   submenu: [
+      //     { title: 'All Patients', path: '/patients/list' },
+      //     { title: 'Register Patient', path: '/patients/register' },
+      //   ]
+      // },
       {
         title: 'Profile',
         icon: User,
-        
         path: '/profile/user' 
         
       },
@@ -88,24 +87,24 @@ const Sidebar = () => {
           { title: 'Register Existing Doctor', path: '/users/register-existing-doctor' }
         ]
       },
-      {
-        title: 'Patients',
-        icon: UserCheck,
-        submenu: [
-          { title: 'All Patients', path: '/patients/list' },
-          { title: 'Register Patient', path: '/patients/register' },
-          { title: 'Admitted Patients', path: '/patients/frequent' }
-        ]
-      },
-      {
-        title: 'Visits',
-        icon: ClipboardList,
-        submenu: [
-          // { title: 'New Visit', path: '/visits/new' },
-          { title: "Today's Visits", path: '/visits/hospital/today' },
-          { title: 'All Hospital Visits', path: '/visits/hospital/all' }  
-        ]
-      },
+      // {
+      //   title: 'Patients',
+      //   icon: UserCheck,
+      //   submenu: [
+      //     { title: 'All Patients', path: '/patients/list' },
+      //     { title: 'Register Patient', path: '/patients/register' },
+      //     { title: 'Admitted Patients', path: '/patients/frequent' }
+      //   ]
+      // },
+      // {
+      //   title: 'Visits',
+      //   icon: ClipboardList,
+      //   submenu: [
+      //     // { title: 'New Visit', path: '/visits/new' },
+      //     { title: "Today's Visits", path: '/visits/hospital/today' },
+      //     { title: 'All Hospital Visits', path: '/visits/hospital/all' }  
+      //   ]
+      // },
       {
         title: 'Hospital',
         icon: Hospital,

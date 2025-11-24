@@ -288,14 +288,14 @@ const VisitsDayHospital = () => {
             <thead>
               <tr>
                 <th>Time</th>
-                <th>Visit #</th>
+              
                 <th>Patient</th>
                 <th>Contact</th>
-                <th>Visit Type</th>
+               
                 <th>Priority</th>
                 <th>Reason</th>
                 <th>Status</th>
-                <th>Branch</th>
+                
                 <th>Actions</th>
               </tr>
             </thead>
@@ -307,9 +307,7 @@ const VisitsDayHospital = () => {
                       {formatTime(visit.visit_date)}
                     </div>
                   </td>
-                  <td>
-                    <strong>{visit.visit_number}</strong>
-                  </td>
+                 
                   <td>
                     <div style={{ fontWeight: '500' }}>
                       {visit.patient_first_name} {visit.patient_last_name}
@@ -320,18 +318,7 @@ const VisitsDayHospital = () => {
                       {visit.patient_phone || 'N/A'}
                     </div>
                   </td>
-                  <td>
-                    <span style={{
-                      backgroundColor: '#dbeafe',
-                      color: '#1e40af',
-                      padding: '4px 12px',
-                      borderRadius: '12px',
-                      fontSize: '12px',
-                      fontWeight: '500'
-                    }}>
-                      {visit.visit_type || 'N/A'}
-                    </span>
-                  </td>
+                
                   <td>
                     <span 
                       className={`priority-badge ${getPriorityClass(visit.priority_level)}`}
@@ -368,9 +355,7 @@ const VisitsDayHospital = () => {
                       {visit.admission_status || 'Pending'}
                     </span>
                   </td>
-                  <td>
-                    {visit.branch_name || <span style={{ color: '#9ca3af' }}>Main</span>}
-                  </td>
+                 
                   <td>
                     <button 
                       className="btn-secondary"

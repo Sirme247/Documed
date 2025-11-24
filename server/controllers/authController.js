@@ -11,7 +11,7 @@ export const signInUser = async (req, res) => {
       });
     }
 
-    // 🔹 Get user by email or username
+    // Get user by email or username
     const result = await pool.query(
       `SELECT * FROM users WHERE email = $1 OR username = $2`,
       [email, username]
@@ -25,7 +25,7 @@ export const signInUser = async (req, res) => {
       });
     }
 
-    // 🔹 Compare password
+    // Compare password
     const isMatch = await comparePassword(password, user.password_hash);
     if (!isMatch) {
       return res.status(400).json({
@@ -34,7 +34,7 @@ export const signInUser = async (req, res) => {
       });
     }
 
-    // 🔹 Blocked account or employment
+    // Blocked account or employment
     const blockedAccountStatuses = ["suspended", "locked", "archived"];
     const blockedEmploymentStatuses = ["fired", "suspended"];
 
@@ -48,7 +48,7 @@ export const signInUser = async (req, res) => {
       });
     }
 
-    // 🔹 Update last login timestamp
+    // Update last login timestamp
     await pool.query(
       "UPDATE users SET last_login = CURRENT_TIMESTAMP WHERE user_id = $1",
       [user.user_id]
@@ -58,7 +58,7 @@ export const signInUser = async (req, res) => {
     let branch_id = user.branch_id;
     let hospitals = [];
 
-    // 🔹 If doctor and hospital_id is null → fetch from provider_hospitals
+    // If doctor and hospital_id is null → fetch from provider_hospitals
     if (user.role_id === 3 && !hospital_id) {
       const providerResult = await pool.query(
         `SELECT provider_id FROM healthcare_providers WHERE user_id = $1`,
@@ -83,7 +83,7 @@ export const signInUser = async (req, res) => {
 
         hospitals = hospitalResults.rows;
 
-        // 🏥 Set hospital_id and branch_id from primary or first hospital
+        // Set hospital_id and branch_id from primary or first hospital
         if (hospitals.length > 0) {
           // Use primary hospital if exists, otherwise use first one
           const primaryHospital = hospitals.find(h => h.is_primary) || hospitals[0];
@@ -93,27 +93,27 @@ export const signInUser = async (req, res) => {
       }
     }
 
-    // 🔹 Create JWT with hospital_id and branch_id included
+    // Create JWT with hospital_id and branch_id included
     const token = createJWT({
       user_id: user.user_id,
       role_id: user.role_id,
-      hospital_id: hospital_id,  // Now includes provider's hospital
-      branch_id: branch_id,      // Now includes provider's branch
+      hospital_id: hospital_id,  
+      branch_id: branch_id,      
       must_change_password: user.must_change_password,
     });
 
     delete user.password_hash;
 
-    // 🔹 Return user with hospital_id and branch_id set
+    // Return user with hospital_id and branch_id set
     res.status(200).json({
       status: "success",
       message: "User signed in successfully",
       user: {
         ...user,
-        hospital_id,  // Add to user object
-        branch_id,    // Add to user object
+        hospital_id,  
+        branch_id,   
       },
-      hospitals,      // All hospitals for multi-hospital providers
+      hospitals,      
       token,
     });
   } catch (error) {
@@ -136,7 +136,7 @@ export const doctorSelectHospital = async (req, res) => {
         message: "Please provide hospital_id and branch_id",
       });
     }
-    // 🔹 Verify that the hospital and branch belong to the docto
+    // Verify that the hospital and branch belong to the doctor
     const hospitalResults = await pool.query(
       `SELECT 
           ph.hospital_id,
@@ -154,7 +154,7 @@ export const doctorSelectHospital = async (req, res) => {
         message: "Invalid hospital_id or branch_id for this user",
       });
     }
-    // 🔹 Create new JWT with selected hospital and branc
+    // Create new JWT with selected hospital and branch
     const token = createJWT({
       user_id: user_id,
       role_id: req.user.role_id,

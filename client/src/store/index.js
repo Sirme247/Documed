@@ -2,19 +2,17 @@ import {create} from "zustand";
 
 const useStore = create((set,get )=>({
     theme: "light",
-    // localStorage.getItem("theme") ??
-    user: null, // Don't initialize from localStorage here
+    
+    user: null, 
     navigationHistory: [],
     addToNavigationHistory: (path, name) => {
     const { navigationHistory } = get();
     
-    // Don't add if it's the same as the last item
     if (navigationHistory.length > 0 && 
         navigationHistory[navigationHistory.length - 1].path === path) {
       return;
     }
     
-    // Add the new path
     set({
       navigationHistory: [...navigationHistory, { path, name, timestamp: Date.now() }]
     });
@@ -29,7 +27,7 @@ const useStore = create((set,get )=>({
     });
   },
   
-  // Navigate back in history
+  
   navigateBackInHistory: (toIndex) => {
     const { navigationHistory } = get();
     set({
@@ -39,7 +37,7 @@ const useStore = create((set,get )=>({
 
     setTheme: (value) => set({ theme: value}),
     setCredentials: (user) => {
-        localStorage.setItem("user", JSON.stringify(user)); // Persist to localStorage
+        localStorage.setItem("user", JSON.stringify(user)); 
         set({ user });
         console.log("User set in store:", user);
     },

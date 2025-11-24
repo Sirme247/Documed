@@ -10,7 +10,7 @@ import api from "../../libs/apiCall.js"
 import { setAuthToken } from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
 
-// Separate schemas for username and email login
+
 const UsernameSignInSchema = z.object({
   username: z.string().min(3, "Username must be at least 3 characters"),
   password: z.string()
@@ -43,7 +43,7 @@ const SignIn = () => {
   // Toggle between username and email login
   const handleLoginMethodToggle = () => {
     setLoginMethod(prev => prev === "username" ? "email" : "username");
-    reset(); // Clear form when switching
+    reset(); 
   };
 
   const onSubmit = async (data) => {
@@ -69,7 +69,7 @@ const SignIn = () => {
         return;
       }
 
-      // Normal login flow (single hospital or non-doctor)
+      // Normal login flow for single hospital or non-doctor
       setAuthToken(token);
       useStore.getState().setCredentials({ token, ...user });
       localStorage.setItem("user", JSON.stringify({ token, ...user }));

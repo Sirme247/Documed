@@ -130,7 +130,7 @@ export const RecordLabTests = async (req, res) => {
       });
     }
 
-    // Verify that the PDF key belongs to this user (security check)
+    // Verify that the PDF key belongs to this user
     if (pdf_key && !pdf_key.startsWith(`users/${user.user_id}/`)) {
       console.error("Unauthorized file access attempt:", pdf_key);
       return res.status(403).json({

@@ -136,13 +136,11 @@ const GlobalAdminDashboard = () => {
             <span className="stat-value">{statistics.total_hospitals || 0}</span>
             <span className="stat-sublabel">{statistics.active_hospitals || 0} Active</span>
           </div>
-          <div className="stat-trend positive">
-            <span>+12%</span>
-          </div>
+          
         </div>
 
         {/* <div className="stat-card success" onClick={() => navigate('/hospitals/list')}> */}
-        <div className="stat-card success">
+        {/* <div className="stat-card success">
           <div className="stat-icon-wrapper success">
             <span className="stat-icon">🏢</span>
           </div>
@@ -154,7 +152,7 @@ const GlobalAdminDashboard = () => {
           <div className="stat-trend positive">
             <span>+8%</span>
           </div>
-        </div>
+        </div> */}
 
         {/* <div className="stat-card warning" onClick={() => navigate('/users/list')}> */}
         <div className="stat-card warning">
@@ -166,9 +164,7 @@ const GlobalAdminDashboard = () => {
             <span className="stat-value">{statistics.total_users || 0}</span>
             <span className="stat-sublabel">System-wide staff</span>
           </div>
-          <div className="stat-trend positive">
-            <span>+15%</span>
-          </div>
+          
         </div>
 
         {/* <div className="stat-card info" onClick={() => navigate('/patients/list')}> */}
@@ -181,9 +177,7 @@ const GlobalAdminDashboard = () => {
             <span className="stat-value">{statistics.total_patients || 0}</span>
             <span className="stat-sublabel">Registered patients</span>
           </div>
-          <div className="stat-trend positive">
-            <span>+23%</span>
-          </div>
+          
         </div>
 
         {/* <div className="stat-card purple" onClick={() => navigate('/visits')}>
@@ -231,10 +225,10 @@ const GlobalAdminDashboard = () => {
             <span className="action-icon">📊</span>
             <span className="action-label">View Reports</span>
           </button> */}
-          <button onClick={() => navigate('/patients/register')} className="quick-action-card">
+          {/* <button onClick={() => navigate('/patients/register')} className="quick-action-card">
             <span className="action-icon">📝</span>
             <span className="action-label">Register Patient</span>
-          </button>
+          </button> */}
           {/* <button onClick={() => navigate('/settings')} className="quick-action-card">
             <span className="action-icon">⚙️</span>
             <span className="action-label">System Settings</span>
@@ -381,7 +375,7 @@ const GlobalAdminDashboard = () => {
             <div className="card-header">
               <h3>Recent System Activity</h3>
               <button onClick={() => navigate('/audits/logs')} className="btn-link">
-                View All Logs →
+                View All →
               </button>
             </div>
             <div className="card-content">

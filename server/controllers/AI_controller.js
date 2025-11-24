@@ -4,7 +4,6 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-// Initialize Groq AI
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
 
 export const PatientAISummary = async (req, res) => {
@@ -36,23 +35,20 @@ export const PatientAISummary = async (req, res) => {
 
     const patient = patientResult.rows[0];
 
-    // Fetch allergies
+  
     const allergiesQuery = `SELECT * FROM allergies WHERE patient_id = $1 ORDER BY allergy_severity DESC, created_at DESC`;
     const allergies = await client.query(allergiesQuery, [patient_id]);
 
-    // Fetch chronic conditions
     const chronicQuery = `SELECT * FROM chronic_conditions WHERE patient_id = $1 ORDER BY is_active DESC, diagnosed_date DESC`;
     const chronicConditions = await client.query(chronicQuery, [patient_id]);
 
-    // Fetch medications
     const medicationsQuery = `SELECT * FROM medications WHERE patient_id = $1 ORDER BY medication_is_active DESC, created_at DESC`;
     const medications = await client.query(medicationsQuery, [patient_id]);
 
-    // Fetch family history
     const familyQuery = `SELECT * FROM family_history WHERE patient_id = $1`;
     const familyHistory = await client.query(familyQuery, [patient_id]);
 
-    // Fetch ALL visits from the past year with full details
+    // Fetch ALL visits from the past year 
     const oneYearAgo = new Date();
     oneYearAgo.setFullYear(oneYearAgo.getFullYear() - 1);
 
@@ -95,7 +91,7 @@ export const PatientAISummary = async (req, res) => {
         
         json_agg(DISTINCT jsonb_build_object(
           'findings', ir.findings,
-          'recommendations', ir.reccomendations
+          'recommendations', ir.recommendations
         )) FILTER (WHERE ir.imaging_result_id IS NOT NULL) as imaging_results,
         
         json_agg(DISTINCT jsonb_build_object(
@@ -139,7 +135,7 @@ export const PatientAISummary = async (req, res) => {
 
     const age = calculateAge(patient.date_of_birth);
 
-    // Build critical alerts (this doesn't need AI)
+    // Build critical alerts 
     const criticalAlerts = allergies.rows
       .filter(a => a.allergy_severity === 'Severe' || a.allergy_severity === 'Moderate')
       .map(a => ({
@@ -249,7 +245,7 @@ IMPORTANT GUIDELINES:
 
 Generate the clinical summary now:`;
 
-    // Call Groq AI
+    // Call the AI
     const result = await groq.chat.completions.create({
       messages: [
         {
@@ -269,7 +265,6 @@ Generate the clinical summary now:`;
 
     const aiText = result.choices[0].message.content;
     
-    // Parse AI response
     let aiSummaryContent;
     try {
       aiSummaryContent = JSON.parse(aiText);
@@ -304,7 +299,6 @@ Generate the clinical summary now:`;
     };
 
     res.status(200).json({
-      
       status: "success",
       message: "AI Summary generated successfully",
       data: aiSummary

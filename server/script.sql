@@ -8,19 +8,12 @@ CREATE TABLE roles (
 );
 
 -- ROLES
--- 1. superadmin
--- 2. admin
+-- 1. system admin
+-- 2. hospital admin
 -- 3. provider
 -- 4. nurse
 -- 5. receptionist
 
--- CREATE OR REPLACE FUNCTION update_updated_at_column()
--- RETURNS TRIGGER AS $$
--- BEGIN
---   NEW.updated_at = NOW();
---   RETURN NEW;
--- END;
--- $$ language 'plpgsql';
 
 
 CREATE TABLE hospitals (
@@ -737,3 +730,20 @@ EXECUTE FUNCTION update_series_statistics();
 
 -- TRUNCATE TABLE imaging_studies, imaging_series, imaging_instances
 -- RESTART IDENTITY CASCADE;
+
+-- Add status column if not exists
+ALTER TABLE visits 
+ADD COLUMN IF NOT EXISTS visit_status VARCHAR(50) DEFAULT 'open';
+
+-- Add index for better query performance
+CREATE INDEX IF NOT EXISTS idx_visit_status ON visits(visit_status);
+
+-- Update existing visits to 'open' (or 'closed' if discharge_date is set)
+UPDATE visits 
+
+SET visit_status = CASE
+    WHEN admission_status NOT IN ('admitted', 'under observation') THEN 'open'
+    ELSE 'closed'
+END;
+
+

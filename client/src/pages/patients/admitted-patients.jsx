@@ -77,7 +77,6 @@ const FrequentPatients = () => {
     );
     console.log("Discharging visit:", visitId);
 
-
     if (!confirmed) return;
 
     try {
@@ -124,8 +123,9 @@ const FrequentPatients = () => {
       return;
     }
 
-    const headers = ["Visit Number", "Patient Name", "Age", "Gender", "Priority", "Admission Date", "Days Admitted", "Branch"];
-    const csvData = patients.map((p) => [
+    const headers = ["#", "Visit Number", "Patient Name", "Age", "Gender", "Priority", "Admission Date", "Days Admitted", "Branch"];
+    const csvData = patients.map((p, index) => [
+      index + 1,
       p.visit_number,
       `${p.first_name} ${p.last_name}`,
       p.age || "N/A",
@@ -272,25 +272,30 @@ const FrequentPatients = () => {
             <table className="data-table">
               <thead>
                 <tr>
-                  <th style={{ width: "40px" }}></th>
+                  <th style={{ width: "50px" }}>#</th>
+                  
                   <th>Patient</th>
-                  <th>Visit #</th>
+                  
                   <th>Priority</th>
                   <th>Admitted</th>
                   <th>Duration</th>
-                  <th>Branch</th>
+              
                   <th>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {patients.map((patient) => (
+                {patients.map((patient, index) => (
                   <React.Fragment key={patient.visit_id}>
                     <tr className="table-row">
-                      <td>
-                        <button className="icon-btn" onClick={() => toggleRow(patient.visit_id)}>
-                          {expandedRows.has(patient.visit_id) ? <ChevronUp size={20} /> : <ChevronDown size={20} />}
-                        </button>
+                      <td style={{ 
+                        fontWeight: "600", 
+                        color: "#6b7280",
+                        fontSize: "14px",
+                        textAlign: "center"
+                      }}>
+                        {index + 1}
                       </td>
+                    
                       <td>
                         <div className="patient-info">
                           <div className="patient-avatar">
@@ -306,9 +311,7 @@ const FrequentPatients = () => {
                           </div>
                         </div>
                       </td>
-                      <td>
-                        <span className="mrn-code">{patient.visit_number}</span>
-                      </td>
+                     
                       <td>
                         <span className={`priority-badge ${getPriorityClass(patient.priority_level)}`}>
                           {patient.priority_level?.toUpperCase() || 'NORMAL'}
@@ -327,7 +330,8 @@ const FrequentPatients = () => {
                           {formatDuration(patient.days_since_admission)}
                         </div>
                       </td>
-                      <td className="text-secondary">{patient.branch_name || "Main"}</td>
+                     
+                       
                       <td>
                         <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                           <button 
@@ -338,18 +342,14 @@ const FrequentPatients = () => {
                           </button>
                           {canDischarge && (
                             <button
-                              className="danger-btn"
+                              className="link-btn"
                               onClick={(e) => {
                                 e.stopPropagation();
                                 handleDischargePatient(patient.visit_id, `${patient.first_name} ${patient.last_name}`);
                               }}
                               disabled={dischargingVisit === patient.visit_id}
                               style={{
-                                padding: "6px 12px",
-                                fontSize: "13px",
-                                display: "flex",
-                                alignItems: "center",
-                                gap: "6px"
+                               color: dischargingVisit === patient.visit_id ? "#f87171" : "#ef4444",
                               }}
                             >
                               {dischargingVisit === patient.visit_id ? (
@@ -369,66 +369,7 @@ const FrequentPatients = () => {
                       </td>
                     </tr>
 
-                    {/* Expanded Row */}
-                    {expandedRows.has(patient.visit_id) && (
-                      <tr className="expanded-row">
-                        <td colSpan="8">
-                          <div className="expanded-content">
-                            <div className="expanded-grid">
-                              <div>
-                                <h4 className="expanded-title">Contact Information</h4>
-                                <div className="info-list">
-                                  <div className="info-item">
-                                    <Phone size={16} />
-                                    <span>{patient.primary_number || "N/A"}</span>
-                                  </div>
-                                  <div className="info-item">
-                                    <Mail size={16} />
-                                    <span>{patient.email || "N/A"}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div>
-                                <h4 className="expanded-title">Visit Information</h4>
-                                <div className="info-list">
-                                  <div className="info-item">
-                                    <strong>Visit Type:</strong>
-                                    <span>{patient.visit_type || "Not specified"}</span>
-                                  </div>
-                                  <div className="info-item">
-                                    <strong>Reason:</strong>
-                                    <span>{patient.reason_for_visit || "Not specified"}</span>
-                                  </div>
-                                  <div className="info-item">
-                                    <strong>Status:</strong>
-                                    <span>{patient.admission_status || "Admitted"}</span>
-                                  </div>
-                                </div>
-                              </div>
-
-                              <div>
-                                <h4 className="expanded-title">Activity Summary</h4>
-                                <div className="info-list">
-                                  <div className="info-item">
-                                    <Activity size={16} />
-                                    <span>Total Records: {patient.total_records || 0}</span>
-                                  </div>
-                                  <div className="info-item">
-                                    <strong>Vitals:</strong>
-                                    <span>{patient.activities?.vitals_recorded || 0}</span>
-                                  </div>
-                                  <div className="info-item">
-                                    <strong>Diagnoses:</strong>
-                                    <span>{patient.activities?.diagnoses || 0}</span>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        </td>
-                      </tr>
-                    )}
+                   
                   </React.Fragment>
                 ))}
               </tbody>

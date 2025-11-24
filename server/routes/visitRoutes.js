@@ -2,7 +2,10 @@ import express from 'express';
 import { registerVisit,recordVitals,recordDiagnosis,
     recordTreatments,recordVisitPrescriptions,
     RecordLabTests,recordImagingResults,getVisitDetails,getPatientVisits,deleteVisit,
-    getVisitsList,getHospitalVisitsForDay, visitsInHospital
+    getVisitsList,getHospitalVisitsForDay, visitsInHospital,getVisitPermissions,
+  updateVisit,
+  closeVisit,
+  reopenVisit
 } from '../controllers/visitController.js';
 
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
@@ -27,5 +30,16 @@ router.post('/record-treatment',authMiddleware, recordTreatments);
 router.post('/record-visit-prescriptions',authMiddleware, recordVisitPrescriptions);
 router.post('/record-lab-tests',authMiddleware, RecordLabTests);
 router.post('/record-imaging-results',authMiddleware, recordImagingResults);
+
+router.get('/:visit_id/permissions', getVisitPermissions);
+
+
+router.put('/:visit_id', updateVisit);
+
+
+router.post('/:visit_id/close', closeVisit);
+
+
+router.post('/:visit_id/reopen', reopenVisit);
 
 export default router;

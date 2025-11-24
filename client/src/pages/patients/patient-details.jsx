@@ -3,10 +3,12 @@ import "./patients.css";
 import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
 import { useParams, useNavigate } from "react-router-dom";
+import useStore from "../../store/index.js";
 
 const PatientDetails = () => {
   const { patient_id } = useParams();
   const navigate = useNavigate();
+  const user = useStore((state) => state.user);
   
   const [loading, setLoading] = useState(true);
   const [patient, setPatient] = useState(null);
@@ -19,6 +21,9 @@ const PatientDetails = () => {
   });
   const [recentVisits, setRecentVisits] = useState([]);
   const [activeTab, setActiveTab] = useState("overview");
+
+  // Check if user is role_id 3 or 4
+  const isDoctor = user?.role_id === 3 || user?.role_id === 4;
 
   // Fetch patient details
   useEffect(() => {
@@ -109,10 +114,7 @@ const PatientDetails = () => {
     <div className="patient-details-container">
       {/* Header */}
       <div className="details-header">
-        {/* <button onClick={() => navigate("/patients")} className="btn-back">
-          ← Back to Patients
-        </button> */}
-         <h2>Patient Details</h2>
+        <h2>Patient Details</h2>
       
         <div className="header-actions">
           <button 
@@ -211,12 +213,17 @@ const PatientDetails = () => {
           >
             Medical History
           </button>
-          <button 
-            className={`tab ${activeTab === "visits" ? "active" : ""}`}
-            onClick={() => setActiveTab("visits")}
-          >
-            Visits ({recentVisits.length})
-          </button>
+          
+          {/* Only show Visits tab to doctors (role_id 3 or 4) */}
+          {isDoctor && (
+            <button 
+              className={`tab ${activeTab === "visits" ? "active" : ""}`}
+              onClick={() => setActiveTab("visits")}
+            >
+              Visits ({recentVisits.length})
+            </button>
+          )}
+          
           <button 
             className={`tab ${activeTab === "contact" ? "active" : ""}`}
             onClick={() => setActiveTab("contact")}
@@ -225,6 +232,13 @@ const PatientDetails = () => {
           </button>
         </div>
       </div>
+
+      {/* Restricted Access Message */}
+      {!isDoctor && activeTab === "visits" && (
+        <div className="access-denied-banner">
+          <p>Only doctors can access the Visits tab.</p>
+        </div>
+      )}
 
       {/* Tab Content */}
       <div className="tab-content">
@@ -471,12 +485,6 @@ const PatientDetails = () => {
             {/* Social History */}
             <div className="info-card">
               <h3>Social History</h3>
-               <button
-               onClick={() => navigate(`/patients/add-social-history`, { state: { patient } })} 
-           className="btn-secondary"
-              >
-                Add Social History
-              </button>
               {!medicalHistory.social_history ? (
                 <p className="empty-state">No social history recorded</p>
               ) : (
@@ -515,8 +523,8 @@ const PatientDetails = () => {
           </div>
         )}
 
-        {/* Visits Tab */}
-        {activeTab === "visits" && (
+        {/* Visits Tab - Only visible to doctors */}
+        {activeTab === "visits" && isDoctor && (
           <div className="info-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '1rem' }}>
               <h3>Recent Visits</h3>
@@ -563,16 +571,6 @@ const PatientDetails = () => {
                     </div>
                   ))}
                 </div>
-                {/* {hasMoreVisits && (
-                  <div style={{ textAlign: 'center', marginTop: '1.5rem' }}>
-                    <button
-                      onClick={() => navigate(`/visits/patients/${patient_id}`)}
-                      className="btn-primary"
-                    >
-                      View All Visits ({recentVisits.length})
-                    </button>
-                  </div>
-                )} */}
               </>
             )}
           </div>

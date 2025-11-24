@@ -72,12 +72,12 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
   console.log('allowedRoles:', allowedRoles);
   
   if (!isAuthenticated) {
-    console.log('❌ Not authenticated');
+    console.log(' Not authenticated');
     return <Navigate to="/sign-in" replace />
   }
   
   if (user?.must_change_password && location.pathname !== '/password-change' && location.pathname !== '/sign-out') {
-    console.log('⚠️ User must change password, redirecting...');
+    console.log(' User must change password, redirecting...');
     return <Navigate to="/password-change" replace />
   }
   
@@ -90,7 +90,7 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
       return match;
     });
     
-    console.log('Final result:', hasAccess ? '✅ GRANTED' : '❌ DENIED');
+    console.log('Final result:', hasAccess ? ' GRANTED' : ' DENIED');
     
     if (!hasAccess) {
       return <Navigate to="/unauthorized" replace />
@@ -156,7 +156,7 @@ const Unauthorized = () => (
 function App() {
   const [isInitialized, setIsInitialized] = useState(false);
   const setCredentials = useStore(state => state.setCredentials);
-  const user = useStore(state => state.user); // ✅ Get user to check authentication
+  const user = useStore(state => state.user); 
 
   useEffect(() => {
     const storedUser = localStorage.getItem("user");
@@ -185,10 +185,10 @@ function App() {
     setIsInitialized(true);
   }, [setCredentials]);
 
-  // ✅ Check if user is authenticated
+  // Check if user is authenticated
   const isAuthenticated = !!user?.token;
 
-  // ✅ Public routes that should NOT show sidebar
+  // Public routes that should NOT show sidebar
   const publicPaths = ['/sign-in', '/sign-out', '/password-reset', '/select-hospital', '/unauthorized'];
   const location = useLocation?.() || { pathname: window.location.pathname };
   const isPublicRoute = publicPaths.includes(location.pathname);
@@ -252,7 +252,7 @@ function App() {
         }}
       />
       
-      {/* ✅ Main Layout with Sidebar */}
+      {/* Main Layout with Sidebar */}
      <div style={{ display: 'flex', width: '100%', minHeight: '100vh' }}>
   {/* Sidebar */}
   {isAuthenticated && !isPublicRoute && <Sidebar />}
@@ -267,7 +267,7 @@ function App() {
       transition: 'margin-left 0.3s ease',
       width: '100%',
       maxWidth: '100%',
-      minWidth: 0, // ✅ Critical: allows container to shrink
+      minWidth: 0, //Allows container to shrink
       overflowX: 'hidden',
       boxSizing: 'border-box'
     }}
@@ -291,7 +291,7 @@ function App() {
             <Route path="/" element={<RootLayout />} />
             <Route path="/overview" element={<RootLayout />} />
 
-            {/* Shared routes for all medical staff */}
+            {/* Shared routes for all users */}
             <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4, 5]} />}>
               <Route path="/patients/register" element={<RegisterPatient />} />
 
@@ -339,7 +339,7 @@ function App() {
               <Route path="/users/:user_id/edit" element={<EditUser />} />
             </Route>
 
-            {/* Global Admin ONLY routes */}
+            {/* System Admin ONLY routes */}
             <Route element={<ProtectedRoute allowedRoles={[1]} />}>
               <Route path="/hospitals/register-branch" element={<HospitalBranchRegistration />} />
               <Route path="/dashboard/global-admin" element={<GlobalAdminDashboard />} />
@@ -351,7 +351,7 @@ function App() {
               <Route path="/audits/logs" element={<AuditLogs />} />
             </Route>
 
-            {/* Local Admin ONLY routes */}
+            {/* Hospital Admin ONLY routes */}
             <Route element={<ProtectedRoute allowedRoles={[2]} />}>
               <Route path="/dashboard/local-admin" element={<LocalAdminDashboard />} />
               <Route path="/hospitals/current/get-profile" element={<HospitalProfile />} />

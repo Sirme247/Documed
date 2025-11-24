@@ -21,7 +21,10 @@ const AddFamilyHistory = () => {
   const [loading, setLoading] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
-  const patient_id = location.state?.patient_id;
+  
+  // Get patient_id from either location.state.patient or location.state.patient_id
+  const patient = location.state?.patient;
+  const patient_id = patient?.patient_id || location.state?.patient_id;
 
   const {
     register,
@@ -56,9 +59,9 @@ const AddFamilyHistory = () => {
 
       toast.success(res.message || "Family history recorded successfully!");
       
-      // Navigate back to the patient's medical records page
+      // Navigate back to the patient details page
       if (patient_id) {
-        navigate(`/patients/edit-medicals/${patient_id}`);
+        navigate(`/patients/${patient_id}`);
       } else {
         reset();
       }
@@ -72,7 +75,7 @@ const AddFamilyHistory = () => {
 
   const handleCancel = () => {
     if (patient_id) {
-      navigate(`/patients/${patient_id}/edit`);
+      navigate(`/patients/${patient_id}`);
     } else {
       navigate(-1);
     }
@@ -81,6 +84,11 @@ const AddFamilyHistory = () => {
   return (
     <div className="patient-record-form">
       <h2>Add Family History</h2>
+      {patient && (
+        <div style={{ marginBottom: '1rem', padding: '0.75rem', backgroundColor: '#f3f4f6', borderRadius: '4px' }}>
+          <strong>Patient:</strong> {patient.first_name} {patient.last_name} (MRN: {patient.identifiers?.[0]?.patient_mrn || 'N/A'})
+        </div>
+      )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
         <div className="form-section">

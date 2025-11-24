@@ -10,7 +10,7 @@ const storage = multer.memoryStorage();
 export const uploadDicomMiddleware = multer({
   storage: storage,
   limits: {
-    fileSize: 500 * 1024 * 1024 // 500MB limit
+    fileSize: 500 * 1024 * 1024 // 500 MB limit per file
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = ['.dcm', '.dicom'];
@@ -18,7 +18,7 @@ export const uploadDicomMiddleware = multer({
     const isDicomMime = file.mimetype === 'application/dicom' || 
                         file.mimetype === 'application/octet-stream';
     
-    // Allow files without extensions (common for DICOM)
+    // Allow files without extensions 
     if (allowedTypes.includes(ext) || isDicomMime || !ext) {
       cb(null, true);
     } else {
@@ -26,14 +26,14 @@ export const uploadDicomMiddleware = multer({
     }
   }
 }).any(); 
-// Upload DICOM study (multiple files treated as one study)
+// Upload DICOM study 
 export const uploadDicomStudy = async (req, res) => {
   const client = await pool.connect();
   
   try {
     const { visit_id, findings, recommendations, body_part_override } = req.body;
     
-    // ✅ Handle files from any field name
+    // Handle files from any field name
     const dicomFiles = req.files || [];
     const user_id = req.user.user_id;
 
@@ -113,7 +113,7 @@ export const uploadDicomStudy = async (req, res) => {
 
     console.log(`Files grouped into ${Object.keys(studiesByStudyId).length} study/studies`);
 
-    // Wait a bit for Orthanc to process and index the studies
+    // Wait for Orthanc to process and index the studies
     await new Promise(resolve => setTimeout(resolve, 1000));
 
     // Process each study
@@ -123,7 +123,7 @@ export const uploadDicomStudy = async (req, res) => {
       try {
         console.log(`Processing study ${orthancStudyId} with ${instances.length} instances`);
 
-        // Get study information from Orthanc - use simpler approach
+        // Get study information from Orthanc 
         const studyInfo = await orthancService.getStudy(orthancStudyId);
         
         // Get tags from first instance for metadata
