@@ -3,10 +3,12 @@ import "./patients.css";
 import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
 import { useNavigate } from "react-router-dom";
+import useStore from "../../store/index.js";
 
 const PatientList = () => {
   const navigate = useNavigate();
   const [patients, setPatients] = useState([]);
+  const user = useStore((state) => state.user);
   const [loading, setLoading] = useState(false);
   const [pagination, setPagination] = useState({
     total: 0,
@@ -14,6 +16,8 @@ const PatientList = () => {
     limit: 50,
     total_pages: 0
   });
+
+
 
   // Filter states
   const [filters, setFilters] = useState({
@@ -34,6 +38,8 @@ const PatientList = () => {
   });
 
   const [showFilters, setShowFilters] = useState(false);
+
+   const isAdmin = user?.role_id === 1;
 
   // Fetch patients
   const fetchPatients = async (page = 1) => {
@@ -141,12 +147,16 @@ const PatientList = () => {
     <div className="patient-list-container">
       <div className="page-header">
         <h2>Patient List</h2>
-        <button 
-          className="btn-primary" 
-          onClick={() => navigate("/patients/register")}
-        >
-          + Register New Patient
-        </button>
+
+        {!isAdmin && (
+    <button 
+            className="btn-primary" 
+            onClick={() => navigate("/patients/register")}
+          >
+            + Register New Patient
+          </button>
+        )}
+       
       </div>
 
       {/* Search and Filter Section */}

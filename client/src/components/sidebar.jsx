@@ -51,14 +51,12 @@ const Sidebar = () => {
           // { title: 'Register Existing Doctor', path: '/users/register-existing-doctor' }
         // ]
       },
-      // {
-      //   title: 'Patients',
-      //   icon: UserCheck,
-      //   submenu: [
-      //     { title: 'All Patients', path: '/patients/list' },
-      //     { title: 'Register Patient', path: '/patients/register' },
-      //   ]
-      // },
+      {
+        title: 'Patients',
+        icon: UserCheck,
+        path: '/patients/list',
+        
+      },
       {
         title: 'Profile',
         icon: User,
@@ -139,7 +137,8 @@ const Sidebar = () => {
         submenu: [
           // { title: 'New Visit', path: '/visits/new' },
           { title: "Today's Visits", path: '/visits/hospital/today' },
-          { title: 'All Hospital Visits', path: '/visits/hospital/all' }
+          { title: 'All Hospital Visits', path: '/visits/hospital/all' },
+          { title: 'Open Visits', path: '/visits/open' }
         ]
       },
       // {
@@ -179,7 +178,8 @@ const Sidebar = () => {
         title: 'Visits',
         icon: ClipboardList,
         submenu: [
-          { title: 'New Visit', path: '/visits/new' },
+          // { title: 'New Visit', path: '/visits/new' },
+           { title: 'Open Visits', path: '/visits/open' },
           { title: "Today's Visits", path: '/visits/hospital/today' },
           { title: 'All Hospital Visits', path: '/visits/hospital/all' }
         ]
@@ -211,6 +211,7 @@ const Sidebar = () => {
         icon: ClipboardList,
         submenu: [
           // { title: 'New Visit', path: '/visits/new' },
+           { title: 'Open Visits', path: '/visits/open' },
           { title: "Today's Visits", path: '/visits/hospital/today' },
           { title: 'All Hospital Visits', path: '/visits/hospital/all' }
         ]

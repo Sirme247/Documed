@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useLocation } from "react-router-dom";
 import "./hospitals.css";
+import { useNavigate } from "react-router-dom";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useForm } from "react-hook-form";
@@ -25,6 +26,7 @@ const HospitalBranchRegistrationSchema = z.object({
 const HospitalBranchRegistration = () => {
   const [loading, setLoading] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
   
   // Get hospital_id and hospital_name from navigation state
   const { hospital_id, hospital_name } = location.state || {};
@@ -66,10 +68,8 @@ const HospitalBranchRegistration = () => {
       const { data: res } = await api.post("/hospitals/register-hospital-branch", formattedData);
 
       toast.success(res.message || "Hospital branch registered successfully!");
-      reset({
-        hospital_id: hospital_id ? String(hospital_id) : "",
-        country: "Kenya"
-      });
+     
+      navigate(`/hospitals/${hospital_id}`,  );
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.message || error.message);
@@ -89,7 +89,7 @@ const HospitalBranchRegistration = () => {
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
         {/* Parent Hospital */}
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Parent Hospital</h3>
 
           <div className="form-group">
@@ -110,7 +110,7 @@ const HospitalBranchRegistration = () => {
                 : 'The ID of the main hospital this branch belongs to'}
             </small>
           </div>
-        </div>
+        </div> */}
 
         {/* Branch Information */}
         <div className="form-section">

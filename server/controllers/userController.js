@@ -1,9 +1,9 @@
 import bcrypt from 'bcrypt';    
 import crypto from 'crypto';
 import nodemailer from 'nodemailer'
+import { logAudit } from '../libs/auditLogger.js';
 
 
-import { logAudit } from "../libs/auditLogger.js";
 import {pool} from '../libs/database.js';
 import { hashedPassword, createJWT, comparePassword } from '../libs/index.js';
 
@@ -590,23 +590,42 @@ export const checkExistingPractitioner = async (req, res) => {
     let params = [];
     let paramCount = 1;
 
-    if (license_number) {
+    // FIXED: Separate logic for license_number search vs email search
+    if (license_number && country) {
+      // If searching by license, BOTH license AND country must match
+      conditions.push(`hp.license_number = $${paramCount}`);
+      params.push(license_number);
+      paramCount++;
+      
+      conditions.push(`hp.country = $${paramCount}`);
+      params.push(country);
+      paramCount++;
+    } else if (license_number) {
+      // Just license number without country
       conditions.push(`hp.license_number = $${paramCount}`);
       params.push(license_number);
       paramCount++;
     }
 
     if (email) {
-      conditions.push(`u.email = $${paramCount}`);
-      params.push(email);
-      paramCount++;
+      // Email search is separate - use OR if both email and license provided
+      if (conditions.length > 0) {
+        // Wrap previous conditions in parentheses and add email as OR
+        const previousConditions = `(${conditions.join(' AND ')})`;
+        conditions = [previousConditions];
+        conditions.push(`u.email = $${paramCount}`);
+        params.push(email);
+        paramCount++;
+      } else {
+        conditions.push(`u.email = $${paramCount}`);
+        params.push(email);
+        paramCount++;
+      }
     }
 
-    if (country && license_number) {
-      conditions.push(`hp.country = $${paramCount}`);
-      params.push(country);
-      paramCount++;
-    }
+    const whereClause = conditions.length > 1 && email && license_number
+      ? conditions.join(' OR ')  // OR when both email and license provided
+      : conditions.join(' AND '); // AND for license+country
 
     const query = `
       SELECT 
@@ -615,33 +634,40 @@ export const checkExistingPractitioner = async (req, res) => {
         u.last_name,
         u.email,
         u.role_id,
+        hp.provider_id,
         hp.license_number,
         hp.specialization,
         hp.country,
         json_agg(
           json_build_object(
+            'provider_hospital_id', ph.provider_hospital_id,
             'hospital_id', h.hospital_id,
             'hospital_name', h.hospital_name,
             'branch_id', ph.branch_id,
             'branch_name', b.branch_name,
             'is_primary', ph.is_primary
           )
-        ) as current_hospitals
+        ) FILTER (WHERE h.hospital_id IS NOT NULL) as current_hospitals
       FROM users u
       JOIN healthcare_providers hp ON u.user_id = hp.user_id
       LEFT JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
       LEFT JOIN hospitals h ON ph.hospital_id = h.hospital_id
       LEFT JOIN branches b ON ph.branch_id = b.branch_id
-      WHERE ${conditions.join(' OR ')}
-      GROUP BY u.user_id, hp.license_number, hp.specialization, hp.country
+      WHERE ${whereClause}
+      GROUP BY u.user_id, hp.provider_id, hp.license_number, hp.specialization, hp.country
     `;
 
+    console.log('Check Query:', query);
+    console.log('Check Params:', params);
+
     const result = await pool.query(query, params);
+    delete result.user_id; 
 
     if (result.rows.length > 0) {
       return res.status(200).json({
         status: "success",
         exists: true,
+        
         doctor: result.rows[0]
       });
     }
@@ -661,6 +687,8 @@ export const checkExistingPractitioner = async (req, res) => {
 };
 
 // Search doctor
+
+// Fixed searchDoctor function
 export const searchDoctor = async (req, res) => {
   try {
     const { user_id, license_number, country } = req.query;
@@ -672,7 +700,7 @@ export const searchDoctor = async (req, res) => {
       });
     }
 
-    // Build conditions
+    // Build conditions - FIXED: use AND instead of OR when both are provided
     let conditions = [];
     let params = [];
     let paramCount = 1;
@@ -689,11 +717,15 @@ export const searchDoctor = async (req, res) => {
       paramCount++;
     }
 
-    if (country && license_number) {
+    // FIXED: Country should be AND condition with license_number, not separate
+    if (country) {
       conditions.push(`hp.country = $${paramCount}`);
       params.push(country);
       paramCount++;
     }
+
+    // FIXED: Join conditions with AND (all must match)
+    const whereClause = conditions.join(' AND ');
 
     const query = `
       SELECT 
@@ -702,26 +734,36 @@ export const searchDoctor = async (req, res) => {
         u.last_name,
         u.email,
         u.role_id,
+        hp.provider_id,
         hp.license_number,
         hp.specialization,
         hp.country,
-        json_agg(
-          json_build_object(
-            'hospital_id', h.hospital_id,
-            'hospital_name', h.hospital_name,
-            'branch_id', ph.branch_id,
-            'branch_name', b.branch_name,
-            'is_primary', ph.is_primary
-          )
-        ) FILTER (WHERE h.hospital_id IS NOT NULL) as current_hospitals
+        COALESCE(
+          json_agg(
+            json_build_object(
+              'provider_hospital_id', ph.provider_hospital_id,
+              'hospital_id', h.hospital_id,
+              'hospital_name', h.hospital_name,
+              'branch_id', ph.branch_id,
+              'branch_name', b.branch_name,
+              'is_primary', ph.is_primary,
+              'start_date', ph.start_date,
+              'end_date', ph.end_date
+            )
+          ) FILTER (WHERE h.hospital_id IS NOT NULL),
+          '[]'::json
+        ) as current_hospitals
       FROM users u
       JOIN healthcare_providers hp ON u.user_id = hp.user_id
       LEFT JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
       LEFT JOIN hospitals h ON ph.hospital_id = h.hospital_id
       LEFT JOIN branches b ON ph.branch_id = b.branch_id
-      WHERE ${conditions.join(' AND ')}
-      GROUP BY u.user_id, hp.license_number, hp.specialization, hp.country
+      WHERE ${whereClause}
+      GROUP BY u.user_id, hp.provider_id, hp.license_number, hp.specialization, hp.country
     `;
+
+    console.log('Search Query:', query);
+    console.log('Search Params:', params);
 
     const result = await pool.query(query, params);
 
@@ -731,6 +773,7 @@ export const searchDoctor = async (req, res) => {
         message: "Doctor not found"
       });
     }
+    delete result.user_id; 
 
     res.status(200).json({
       status: "success",
@@ -810,14 +853,14 @@ export const registerExistingMedicalPractitioner = async (req, res) => {
   
     await client.query(
       `INSERT INTO audit_logs (
-         user_id, action, entity, entity_id, description, timestamp
-       ) VALUES ($1, $2, $3, $4, $5, NOW())`,
+         user_id, action_type, table_name,timestamp
+       ) VALUES ($1, $2, $3, NOW())`,
       [
         req.user.user_id,
         "REGISTER_EXISTING_PRACTITIONER",
         "provider_hospitals",
-        newProviderHospital.rows[0].id || null,
-        `Linked provider_id=${provider_id} (license=${license_number}) to hospital_id=${hospital_id} starting ${start_date}`,
+        // newProviderHospital.rows[0].id || null,
+        // `Linked provider_id=${provider_id} (license=${license_number}) to hospital_id=${hospital_id} starting ${start_date}`,
       ]
     );
 
@@ -1867,5 +1910,428 @@ export const getUserProfile = async (req, res) => {
       status: "failed",
       message: "Server error while fetching user profile"
     });
+  }
+};
+
+
+
+/**
+ * Deactivate/Suspend a user account
+ * Sets account_status to 'Inactive' or 'Suspended'
+ */
+export const deactivateUser = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { user_id } = req.params;
+    const { reason, suspension_type = 'suspended' } = req.body; // 'Inactive' or 'Suspended'
+
+    if (!user_id) {
+      return res.status(400).json({ 
+        status: "failed", 
+        message: "User ID required" 
+      });
+    }
+
+    // Prevent self-deactivation
+    if (parseInt(user_id) === req.user.user_id) {
+      return res.status(400).json({ 
+        status: "failed", 
+        message: "Cannot deactivate your own account" 
+      });
+    }
+
+    // Check permissions (only super_admin and hospital_admin)
+    if (![1, 2].includes(req.user.role_id)) {
+      return res.status(403).json({ 
+        status: "failed", 
+        message: "Unauthorized: Admin access required" 
+      });
+    }
+
+    await client.query("BEGIN");
+
+    // Get user details
+    const userResult = await client.query(
+      `SELECT u.user_id, u.first_name, u.last_name, u.email, u.role_id, 
+              u.hospital_id, u.account_status
+       FROM users u
+       WHERE u.user_id = $1`,
+      [user_id]
+    );
+
+    if (userResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ 
+        status: "failed", 
+        message: "User not found" 
+      });
+    }
+
+    const targetUser = userResult.rows[0];
+
+    // Hospital admin can only deactivate users in their hospital
+    if (req.user.role_id === 2) {
+      // Check if user belongs to admin's hospital
+      if (targetUser.role_id !== 3) { // Non-provider
+        if (targetUser.hospital_id !== req.user.hospital_id) {
+          await client.query("ROLLBACK");
+          return res.status(403).json({
+            status: "failed",
+            message: "You can only deactivate users in your hospital"
+          });
+        }
+      } else { // Provider (role_id 3)
+        // Check if provider is linked to admin's hospital
+        const providerCheck = await client.query(
+          `SELECT ph.hospital_id
+           FROM healthcare_providers hp
+           JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
+           WHERE hp.user_id = $1 AND ph.hospital_id = $2`,
+          [user_id, req.user.hospital_id]
+        );
+
+        if (providerCheck.rows.length === 0) {
+          await client.query("ROLLBACK");
+          return res.status(403).json({
+            status: "failed",
+            message: "Access denied: Provider not in your hospital"
+          });
+        }
+      }
+    }
+
+    // Prevent deactivating super admins (unless you're also super admin)
+    if (targetUser.role_id === 1 && req.user.role_id !== 1) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        status: "failed",
+        message: "Cannot deactivate a super administrator"
+      });
+    }
+
+    const oldStatus = targetUser.account_status;
+
+    // Update account status
+    const updateResult = await client.query(
+      `UPDATE users 
+       SET account_status = $1, updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $2
+       RETURNING user_id, first_name, last_name, email, account_status`,
+      [suspension_type, user_id]
+    );
+
+    // Log the action
+    await logAudit({
+      user_id: req.user.user_id,
+      table_name: "users",
+      action_type: "deactivate_user",
+      old_values: { 
+        user_id: targetUser.user_id,
+        account_status: oldStatus 
+      },
+      
+      event_type: "UPDATE",
+      ip_address: req.ip,
+      branch_id: req.user.branch_id,
+      hospital_id: req.user.hospital_id,
+      request_method: req.method,
+      endpoint: req.originalUrl
+    });
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      status: "success",
+      message: `User account ${suspension_type.toLowerCase()} successfully`,
+      data: updateResult.rows[0]
+    });
+
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Deactivate user error:", error);
+    res.status(500).json({ 
+      status: "failed", 
+      message: "Server error" 
+    });
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Reactivate a user account
+ * Sets account_status back to 'Active'
+ */
+export const reactivateUser = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { user_id } = req.params;
+    const { reason } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ 
+        status: "failed", 
+        message: "User ID required" 
+      });
+    }
+
+    // Check permissions
+    if (![1, 2].includes(req.user.role_id)) {
+      return res.status(403).json({ 
+        status: "failed", 
+        message: "Unauthorized: Admin access required" 
+      });
+    }
+
+    await client.query("BEGIN");
+
+    // Get user details
+    const userResult = await client.query(
+      `SELECT u.user_id, u.first_name, u.last_name, u.account_status, 
+              u.hospital_id, u.role_id
+       FROM users u
+       WHERE u.user_id = $1`,
+      [user_id]
+    );
+
+    if (userResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ 
+        status: "failed", 
+        message: "User not found" 
+      });
+    }
+
+    const targetUser = userResult.rows[0];
+
+    // Hospital admin authorization check
+    if (req.user.role_id === 2) {
+      if (targetUser.role_id !== 3) {
+        if (targetUser.hospital_id !== req.user.hospital_id) {
+          await client.query("ROLLBACK");
+          return res.status(403).json({
+            status: "failed",
+            message: "Access denied"
+          });
+        }
+      } else {
+        const providerCheck = await client.query(
+          `SELECT ph.hospital_id
+           FROM healthcare_providers hp
+           JOIN provider_hospitals ph ON hp.provider_id = ph.provider_id
+           WHERE hp.user_id = $1 AND ph.hospital_id = $2`,
+          [user_id, req.user.hospital_id]
+        );
+
+        if (providerCheck.rows.length === 0) {
+          await client.query("ROLLBACK");
+          return res.status(403).json({
+            status: "failed",
+            message: "Access denied"
+          });
+        }
+      }
+    }
+
+    const oldStatus = targetUser.account_status;
+
+    // Reactivate
+    const updateResult = await client.query(
+      `UPDATE users 
+       SET account_status = 'active', updated_at = CURRENT_TIMESTAMP
+       WHERE user_id = $1
+       RETURNING user_id, first_name, last_name, email, account_status`,
+      [user_id]
+    );
+
+    // Log the action
+    await logAudit({
+      user_id: req.user.user_id,
+      table_name: "users",
+      action_type: "reactivate_user",
+      old_values: { 
+        user_id: targetUser.user_id,
+        account_status: oldStatus 
+      },
+      
+      event_type: "UPDATE",
+      ip_address: req.ip,
+      branch_id: req.user.branch_id,
+      hospital_id: req.user.hospital_id,
+      request_method: req.method,
+      endpoint: req.originalUrl
+    });
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      status: "success",
+      message: "User account reactivated successfully",
+      data: updateResult.rows[0]
+    });
+
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Reactivate user error:", error);
+    res.status(500).json({ 
+      status: "failed", 
+      message: "Server error" 
+    });
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Enhanced delete user with better validation
+ * This is a HARD DELETE - use with caution
+ */
+export const deleteUserPermanently = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    const { user_id } = req.params;
+    const { confirmation_text, reason } = req.body;
+
+    if (!user_id) {
+      return res.status(400).json({ 
+        status: "failed", 
+        message: "User ID required" 
+      });
+    }
+
+    // Require explicit confirmation
+    if (confirmation_text !== 'DELETE') {
+      return res.status(400).json({ 
+        status: "failed", 
+        message: "Confirmation text must be 'DELETE'" 
+      });
+    }
+
+    // Prevent self-deletion
+    if (parseInt(user_id) === req.user.user_id) {
+      return res.status(400).json({ 
+        status: "failed", 
+        message: "Cannot delete your own account" 
+      });
+    }
+
+    // Only super admins can delete (stricter than deactivate)
+    if (req.user.role_id !== 1) {
+      return res.status(403).json({ 
+        status: "failed", 
+        message: "Unauthorized: Only super administrators can permanently delete users" 
+      });
+    }
+
+    await client.query("BEGIN");
+
+    // Get user details
+    const userResult = await client.query(
+      `SELECT u.user_id, u.first_name, u.last_name, u.email, u.role_id,
+              u.username, u.employee_id
+       FROM users u
+       WHERE u.user_id = $1`,
+      [user_id]
+    );
+
+    if (userResult.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({ 
+        status: "failed", 
+        message: "User not found" 
+      });
+    }
+
+    const targetUser = userResult.rows[0];
+
+    // Prevent deleting other super admins
+    if (targetUser.role_id === 1 && parseInt(user_id) !== req.user.user_id) {
+      await client.query("ROLLBACK");
+      return res.status(403).json({
+        status: "failed",
+        message: "Cannot delete another super administrator"
+      });
+    }
+
+    // Check if user has related data
+    const dataCheck = await client.query(
+      `SELECT 
+         (SELECT COUNT(*) FROM visits WHERE provider_id IN 
+           (SELECT provider_id FROM healthcare_providers WHERE user_id = $1)) as visit_count,
+         (SELECT COUNT(*) FROM audit_logs WHERE user_id = $1) as audit_count
+      `,
+      [user_id]
+    );
+
+    const { visit_count, audit_count } = dataCheck.rows[0];
+
+    // If provider, delete provider-related records
+    if (targetUser.role_id === 3 || targetUser.role_id === 4) {
+      const providerResult = await client.query(
+        "SELECT provider_id FROM healthcare_providers WHERE user_id = $1",
+        [user_id]
+      );
+
+      if (providerResult.rows.length > 0) {
+        const provider_id = providerResult.rows[0].provider_id;
+
+        // Delete provider hospital links
+        await client.query(
+          "DELETE FROM provider_hospitals WHERE provider_id = $1", 
+          [provider_id]
+        );
+
+        // Delete provider record
+        await client.query(
+          "DELETE FROM healthcare_providers WHERE provider_id = $1", 
+          [provider_id]
+        );
+      }
+    }
+
+    // Delete the user
+    await client.query("DELETE FROM users WHERE user_id = $1", [user_id]);
+
+    // Log the deletion
+    await logAudit({
+      user_id: req.user.user_id,
+      table_name: "users",
+      action_type: "delete_user_permanently",
+      old_values: {
+        ...targetUser,
+        visit_count: parseInt(visit_count),
+        audit_log_count: parseInt(audit_count),
+        deletion_reason: reason || 'No reason provided'
+      },
+      event_type: "DELETE",
+      ip_address: req.ip,
+      branch_id: req.user.branch_id,
+      hospital_id: req.user.hospital_id,
+      request_method: req.method,
+      endpoint: req.originalUrl
+    });
+
+    await client.query("COMMIT");
+
+    res.status(200).json({
+      status: "success",
+      message: "User permanently deleted",
+      data: {
+        deleted_user_id: user_id,
+        username: targetUser.username,
+        related_visits: parseInt(visit_count),
+        audit_logs_affected: parseInt(audit_count)
+      }
+    });
+
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error("Delete user permanently error:", error);
+    res.status(500).json({ 
+      status: "failed", 
+      message: "Server error" 
+    });
+  } finally {
+    client.release();
   }
 };

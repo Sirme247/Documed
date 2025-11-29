@@ -3,6 +3,9 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 
 import routes from './routes/index.js';
+import { scheduleAuditCleanup } from './controllers/auditController.js';
+
+
 
 dotenv.config();
 
@@ -40,6 +43,8 @@ app.use((req, res) => {
         message: 'Route not found'
     });
 });
+
+scheduleAuditCleanup();
 
 app.listen(PORT, () => {
     console.log(`Server is running on port ${PORT}`);

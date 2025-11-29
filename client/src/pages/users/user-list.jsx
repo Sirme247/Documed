@@ -174,8 +174,8 @@ const UserList = () => {
     switch (status?.toLowerCase()) {
       case "active":
         return "status-badge status-active";
-      case "locked":
-        return "status-badge status-locked";
+      case "inactive":
+        return "status-badge status-inactive";
       case "suspended":
         return "status-badge status-suspended";
       case "archived":
@@ -224,7 +224,7 @@ const UserList = () => {
         <div className="search-box">
           <input
             type="text"
-            placeholder="Search by name, username, email, or employee ID..."
+            placeholder="Search by name, username, or email..."
             value={filters.search}
             onChange={handleSearch}
             className="search-input"
@@ -248,7 +248,7 @@ const UserList = () => {
             </select>
           </div>
 
-          <div className="filter-group">
+          {/* <div className="filter-group">
             <label>Hospital ID</label>
             <input
               type="number"
@@ -256,8 +256,8 @@ const UserList = () => {
               value={filters.hospital_id}
               onChange={(e) => handleFilterChange("hospital_id", e.target.value)}
             />
-          </div>
-
+          </div> */}
+{/* 
           <div className="filter-group">
             <label>Branch ID</label>
             <input
@@ -266,7 +266,7 @@ const UserList = () => {
               value={filters.branch_id}
               onChange={(e) => handleFilterChange("branch_id", e.target.value)}
             />
-          </div>
+          </div> */}
 
           <div className="filter-group">
             <label>Employment Status</label>
@@ -277,7 +277,7 @@ const UserList = () => {
               <option value="">All Statuses</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
-              <option value="fired"> Fired</option>
+              <option value="fired">Fired</option>
             </select>
           </div>
 
@@ -290,7 +290,7 @@ const UserList = () => {
               <option value="">All Statuses</option>
               <option value="active">Active</option>
               <option value="suspended">Suspended</option>
-              <option value="locked">Locked</option>
+              <option value="inactive">Inactive</option>
               <option value="archived">Archived</option>
             </select>
           </div>

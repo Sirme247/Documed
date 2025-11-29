@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import "./hospitals.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
@@ -22,6 +23,8 @@ const HospitalRegistrationSchema = z.object({
 
 const HospitalRegistration = () => {
   const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
 
   const {
     register,
@@ -42,6 +45,8 @@ const HospitalRegistration = () => {
       const { data: res } = await api.post("/hospitals/register-hospital", data);
 
       toast.success(res.message || "Hospital registered successfully!");
+
+      navigate("/hospitals/list");
       reset();
     } catch (error) {
       console.error(error);

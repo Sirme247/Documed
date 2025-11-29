@@ -49,6 +49,8 @@ import DoctorSelectHospital from './pages/auth/doctor-select-hospital.jsx'
 import RegisterExistingDoctor from './pages/users/register-existing-doctor.jsx'
 import LastWeekVisits from './pages/visits/last-week-visits.jsx'
 import FrequentPatients from './pages/patients/admitted-patients.jsx'
+import OpenVisits from './pages/visits/open-visits.jsx'
+import UserActionsModal from './pages/users/user-actions-modal.jsx'
 
 
 import Sidebar from './components/sidebar.jsx' 
@@ -318,6 +320,7 @@ function App() {
               <Route path="/visits/record-vitals" element={<RecordVitals />} />
               <Route path="/visits/record-prescriptions" element={<RecordPrescription />} />
               <Route path="/visits/record-treatment" element={<RecordTreatment />} />
+              <Route path="/visits/open" element={<OpenVisits />} />
               
               
               <Route path="/branches/:branch_id" element={<BranchDetails />} />
@@ -337,6 +340,8 @@ function App() {
               <Route path="/users/list" element={<UserList />} />
               <Route path="/users/:user_id" element={<UserDetails />} />
               <Route path="/users/:user_id/edit" element={<EditUser />} />
+
+              <Route path='/user-actions-modal' element={<UserActionsModal />} />
             </Route>
 
             {/* System Admin ONLY routes */}

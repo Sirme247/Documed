@@ -4,7 +4,7 @@ import {
   RecordLabTests,
   getUploadUrl,
   getDownloadUrl,
-  getLabTest
+  getLabTest,deleteLabTest,
 } from "../controllers/labTestsController.js";
 import { authMiddleware } from "../middleware/authMiddleware.js";
 
@@ -24,6 +24,9 @@ router.post("/record", RecordLabTests);
 
 // Get specific lab test
 router.get("/:testId", getLabTest);
+
+// Delete specific lab test
+router.delete("/delete-test/:testId", deleteLabTest);
 
 export default router;
 

@@ -1,6 +1,9 @@
 import {pool} from '../libs/database.js';
 import { logAudit } from "../libs/auditLogger.js";
 
+
+import cron from 'node-cron';
+
 export const getAuditLogs = async (req, res) => {
   try {
     const user_id = req.user?.user_id || null;
@@ -780,4 +783,333 @@ export const getHospitalAuditLogs = async (req, res) => {
       message: "Server error" 
     });
   }
+};
+
+
+
+
+
+
+
+/**
+ * Audit Log Retention Configuration
+ * Adjust these values based on your compliance requirements
+ */
+const RETENTION_CONFIG = {
+  // Security-critical events (login, permission changes, etc.)
+  critical: {
+    days: 730, // 2 years
+    event_types: ['Login', 'Logout', 'Permission_Change', 'Role_Change', 'Access_Denied']
+  },
+  // Financial/billing related (may need 7 years for legal compliance)
+  financial: {
+    days: 2555, // 7 years
+    table_names: ['billing', 'payments', 'invoices', 'transactions']
+  },
+  // Patient data changes (HIPAA may require longer retention)
+  patient_data: {
+    days: 1825, // 5 years
+    table_names: ['patients', 'medical_records', 'prescriptions', 'diagnoses']
+  },
+  // General activity logs
+  general: {
+    days: 365, // 1 year
+    default: true
+  },
+  // Verbose/debug logs
+  verbose: {
+    days: 90, // 3 months
+    event_types: ['Read']
+  }
+};
+
+/**
+ * Delete old audit logs based on retention policy
+ */
+export const cleanupAuditLogs = async () => {
+  const client = await pool.connect();
+  
+  try {
+    await client.query('BEGIN');
+
+    let totalDeleted = 0;
+    const deletionSummary = [];
+
+    // 1. Delete verbose/read logs (90 days)
+    const verboseResult = await client.query(`
+      DELETE FROM audit_logs
+      WHERE timestamp < NOW() - INTERVAL '${RETENTION_CONFIG.verbose.days} days'
+        AND event_type = ANY($1)
+      RETURNING log_id
+    `, [RETENTION_CONFIG.verbose.event_types]);
+    
+    totalDeleted += verboseResult.rowCount;
+    deletionSummary.push({
+      category: 'verbose',
+      deleted: verboseResult.rowCount,
+      retention_days: RETENTION_CONFIG.verbose.days
+    });
+
+    // 2. Delete general logs (1 year) - excluding critical, financial, and patient tables
+    const generalResult = await client.query(`
+      DELETE FROM audit_logs
+      WHERE timestamp < NOW() - INTERVAL '${RETENTION_CONFIG.general.days} days'
+        AND event_type != ALL($1)
+        AND (table_name IS NULL OR table_name NOT IN (
+          SELECT unnest($2::varchar[])
+          UNION
+          SELECT unnest($3::varchar[])
+        ))
+      RETURNING log_id
+    `, [
+      RETENTION_CONFIG.critical.event_types,
+      RETENTION_CONFIG.financial.table_names,
+      RETENTION_CONFIG.patient_data.table_names
+    ]);
+    
+    totalDeleted += generalResult.rowCount;
+    deletionSummary.push({
+      category: 'general',
+      deleted: generalResult.rowCount,
+      retention_days: RETENTION_CONFIG.general.days
+    });
+
+    // 3. Delete patient data logs (5 years)
+    const patientResult = await client.query(`
+      DELETE FROM audit_logs
+      WHERE timestamp < NOW() - INTERVAL '${RETENTION_CONFIG.patient_data.days} days'
+        AND table_name = ANY($1)
+        AND event_type != ALL($2)
+      RETURNING log_id
+    `, [
+      RETENTION_CONFIG.patient_data.table_names,
+      RETENTION_CONFIG.critical.event_types
+    ]);
+    
+    totalDeleted += patientResult.rowCount;
+    deletionSummary.push({
+      category: 'patient_data',
+      deleted: patientResult.rowCount,
+      retention_days: RETENTION_CONFIG.patient_data.days
+    });
+
+    // 4. Delete critical security logs (2 years)
+    const criticalResult = await client.query(`
+      DELETE FROM audit_logs
+      WHERE timestamp < NOW() - INTERVAL '${RETENTION_CONFIG.critical.days} days'
+        AND event_type = ANY($1)
+      RETURNING log_id
+    `, [RETENTION_CONFIG.critical.event_types]);
+    
+    totalDeleted += criticalResult.rowCount;
+    deletionSummary.push({
+      category: 'critical',
+      deleted: criticalResult.rowCount,
+      retention_days: RETENTION_CONFIG.critical.days
+    });
+
+    // 5. Delete financial logs (7 years)
+    const financialResult = await client.query(`
+      DELETE FROM audit_logs
+      WHERE timestamp < NOW() - INTERVAL '${RETENTION_CONFIG.financial.days} days'
+        AND table_name = ANY($1)
+      RETURNING log_id
+    `, [RETENTION_CONFIG.financial.table_names]);
+    
+    totalDeleted += financialResult.rowCount;
+    deletionSummary.push({
+      category: 'financial',
+      deleted: financialResult.rowCount,
+      retention_days: RETENTION_CONFIG.financial.days
+    });
+
+    // Log the cleanup activity (meta-audit)
+    await client.query(`
+      INSERT INTO audit_logs (
+        event_type, 
+        action_type, 
+        table_name, 
+        new_values,
+        timestamp
+      ) VALUES (
+        'System',
+        'Cleanup',
+        'audit_logs',
+        $1,
+        NOW()
+      )
+    `, [JSON.stringify({
+      total_deleted: totalDeleted,
+      deletion_summary: deletionSummary,
+      cleanup_date: new Date().toISOString()
+    })]);
+
+    await client.query('COMMIT');
+
+    console.log(`✅ Audit log cleanup completed: ${totalDeleted} logs deleted`);
+    console.table(deletionSummary);
+
+    return {
+      success: true,
+      total_deleted: totalDeleted,
+      summary: deletionSummary
+    };
+
+  } catch (error) {
+    await client.query('ROLLBACK');
+    console.error('❌ Audit log cleanup failed:', error);
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+/**
+ * Get cleanup statistics without deleting
+ */
+export const getCleanupPreview = async () => {
+  try {
+    const preview = [];
+
+    // Count logs eligible for deletion in each category
+    for (const [category, config] of Object.entries(RETENTION_CONFIG)) {
+      if (category === 'general' && config.default) {
+        const result = await pool.query(`
+          SELECT COUNT(*) as count
+          FROM audit_logs
+          WHERE timestamp < NOW() - INTERVAL '${config.days} days'
+            AND event_type != ALL($1)
+            AND (table_name IS NULL OR table_name NOT IN (
+              SELECT unnest($2::varchar[])
+              UNION
+              SELECT unnest($3::varchar[])
+            ))
+        `, [
+          RETENTION_CONFIG.critical.event_types,
+          RETENTION_CONFIG.financial.table_names,
+          RETENTION_CONFIG.patient_data.table_names
+        ]);
+        
+        preview.push({
+          category,
+          eligible_for_deletion: parseInt(result.rows[0].count),
+          retention_days: config.days
+        });
+      } else if (config.event_types) {
+        const result = await pool.query(`
+          SELECT COUNT(*) as count
+          FROM audit_logs
+          WHERE timestamp < NOW() - INTERVAL '${config.days} days'
+            AND event_type = ANY($1)
+        `, [config.event_types]);
+        
+        preview.push({
+          category,
+          eligible_for_deletion: parseInt(result.rows[0].count),
+          retention_days: config.days
+        });
+      } else if (config.table_names) {
+        const result = await pool.query(`
+          SELECT COUNT(*) as count
+          FROM audit_logs
+          WHERE timestamp < NOW() - INTERVAL '${config.days} days'
+            AND table_name = ANY($1)
+        `, [config.table_names]);
+        
+        preview.push({
+          category,
+          eligible_for_deletion: parseInt(result.rows[0].count),
+          retention_days: config.days
+        });
+      }
+    }
+
+    return preview;
+  } catch (error) {
+    console.error('Error getting cleanup preview:', error);
+    throw error;
+  }
+};
+
+/**
+ * Schedule automatic cleanup
+ * Runs every day at 2 AM
+ */
+export const scheduleAuditCleanup = () => {
+  // Run at 2 AM every day
+  cron.schedule('0 2 * * *', async () => {
+    console.log('🕐 Starting scheduled audit log cleanup...');
+    try {
+      await cleanupAuditLogs();
+    } catch (error) {
+      console.error('Scheduled cleanup failed:', error);
+      // You might want to send an alert/notification here
+    }
+  });
+
+  console.log('✅ Audit log cleanup scheduler started (runs daily at 2 AM)');
+};
+
+/**
+ * Manual cleanup endpoint (for admin use)
+ */
+export const manualCleanupAuditLogs = async (req, res) => {
+  try {
+    // Only allow admins to run manual cleanup
+    if (req.user?.role !== 'super_admin') {
+      return res.status(403).json({
+        status: 'failed',
+        message: 'Unauthorized: Admin access required'
+      });
+    }
+
+    const result = await cleanupAuditLogs();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'Audit logs cleaned up successfully',
+      data: result
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      status: 'failed',
+      message: 'Cleanup failed',
+      error: error.message
+    });
+  }
+};
+
+/**
+ * Preview cleanup endpoint
+ */
+export const previewCleanup = async (req, res) => {
+  try {
+    const preview = await getCleanupPreview();
+    
+    const totalEligible = preview.reduce((sum, item) => sum + item.eligible_for_deletion, 0);
+
+    res.status(200).json({
+      status: 'success',
+      data: {
+        total_eligible_for_deletion: totalEligible,
+        breakdown: preview
+      }
+    });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      status: 'failed',
+      message: 'Failed to generate cleanup preview'
+    });
+  }
+};
+
+// Export for use in your main app file
+export default {
+  cleanupAuditLogs,
+  scheduleAuditCleanup,
+  manualCleanupAuditLogs,
+  previewCleanup,
+  getCleanupPreview
 };

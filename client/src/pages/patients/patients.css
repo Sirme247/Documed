@@ -1,6 +1,4 @@
-.patients-table{
 
-}
 
 
 /* Patient List Container */
@@ -1882,3 +1880,163 @@
     font-size: 1.75rem;
   }
 }
+
+/* Modal styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.7);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 8px;
+  max-width: 500px;
+  width: 90%;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.modal-content h3 {
+  margin-top: 0;
+  margin-bottom: 1rem;
+  color: #333;
+}
+
+.modal-warning {
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  padding: 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+  color: #856404;
+}
+
+.modal-danger-warning {
+  background-color: #f8d7da;
+  border: 1px solid #dc3545;
+  padding: 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+  color: #721c24;
+}
+
+.modal-danger-warning ul {
+  margin: 0.5rem 0 0 1.5rem;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 1rem;
+  justify-content: flex-end;
+  margin-top: 1.5rem;
+}
+
+/* Button styles */
+.btn-warning {
+  background-color: #ffc107;
+  color: #000;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-warning:hover {
+  background-color: #e0a800;
+}
+
+.btn-warning:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+}
+
+.btn-danger {
+  background-color: #dc3545;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-danger:hover {
+  background-color: #c82333;
+}
+
+/* Success button for reactivation */
+.btn-success {
+  background-color: #28a745;
+  color: white;
+  border: none;
+  padding: 0.5rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-weight: 500;
+}
+
+.btn-success:hover {
+  background-color: #218838;
+}
+
+.btn-success:disabled {
+  background-color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* Success message styling in modal */
+.modal-success {
+  background-color: #d4edda;
+  border: 1px solid #28a745;
+  padding: 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+  color: #155724;
+}
+/* Confirmation input section */
+.confirmation-input-section {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.confirmation-input-section label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.confirmation-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #ced4da;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.confirmation-input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.confirmation-input::placeholder {
+  color: #adb5bd;
+  font-style: italic;
+}
+
+

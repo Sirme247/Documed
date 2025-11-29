@@ -762,3 +762,43 @@
     width: 100%;
   }
 }
+
+
+
+
+
+/* Confirmation input section */
+.confirmation-input-section {
+  margin: 1.5rem 0;
+  padding: 1rem;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  border: 1px solid #dee2e6;
+}
+
+.confirmation-input-section label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-size: 0.9rem;
+  color: #495057;
+}
+
+.confirmation-input {
+  width: 100%;
+  padding: 0.75rem;
+  border: 2px solid #ced4da;
+  border-radius: 4px;
+  font-size: 1rem;
+  transition: border-color 0.2s;
+  box-sizing: border-box;
+}
+
+.confirmation-input:focus {
+  outline: none;
+  border-color: #007bff;
+}
+
+.confirmation-input::placeholder {
+  color: #adb5bd;
+  font-style: italic;
+}

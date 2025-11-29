@@ -2,15 +2,20 @@ import React, { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
+import useStore from "../../store/index.js";
 import "./edit_patient.css";
 
 const EditPatient = () => {
   const { patient_id } = useParams();
   const navigate = useNavigate();
+  const user = useStore((state) => state.user);
   
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [activeTab, setActiveTab] = useState("demographics");
+  
+  // Check if user is role_id 3 or 4 (doctors)
+  const isDoctor = user?.role_id === 3 || user?.role_id === 4;
   
   const [formData, setFormData] = useState({
     // Demographics
@@ -209,7 +214,6 @@ const EditPatient = () => {
 
   const handleCancel = () => {
     navigate(`/patients/${patient_id}`);
-    
   };
 
   if (loading) {
@@ -238,12 +242,15 @@ const EditPatient = () => {
           </div>
         </div>
         <div>
-          <button
-           onClick={() => navigate(`/patients/${patient_id}/edit-medicals`, { state: { patient_id } })} 
-           className="btn-secondary"
-          >
-            Edit Medical Details
-          </button>
+          {/* Only show Edit Medical Details button for doctors (role_id 3 or 4) */}
+          {isDoctor && (
+            <button
+              onClick={() => navigate(`/patients/${patient_id}/edit-medicals`, { state: { patient_id } })} 
+              className="btn-submit"
+            >
+              Edit Medical Details
+            </button>
+          )}
         </div>
       </div>
 
@@ -792,6 +799,11 @@ const EditPatient = () => {
             >
               Cancel
             </button>
+            <br></br>
+            <div>
+
+            </div>
+            <br></br>
             <button
               type="submit"
               className="btn-submit"
@@ -804,8 +816,8 @@ const EditPatient = () => {
                 </>
               ) : (
                 <>
-                  <span>💾</span>
-                  <span>Save Changes</span>
+                  
+                  <span>Save</span>
                 </>
               )}
             </button>

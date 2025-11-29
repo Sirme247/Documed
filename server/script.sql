@@ -31,6 +31,7 @@ CREATE TABLE hospitals (
     accredition_status VARCHAR(100) DEFAULT 'Not Accredited',
     contact_number VARCHAR(50) UNIQUE NOT NULL,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -114,6 +115,7 @@ CREATE TABLE patients (
     country_of_birth VARCHAR(100),
     country_of_residence VARCHAR(100),
     national_id VARCHAR(50) UNIQUE,
+    birth_certificate_number VARCHAR(50) UNIQUE,
     date_of_birth DATE, -- age
     gender VARCHAR(10),
     marital_status VARCHAR(50),
@@ -139,6 +141,7 @@ CREATE TABLE patients (
     religion VARCHAR(50),
     is_deceased BOOLEAN DEFAULT FALSE,
     date_of_death DATE,
+    deleted_at TIMESTAMP,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -747,3 +750,11 @@ SET visit_status = CASE
 END;
 
 
+-- Drop the existing constraint
+ALTER TABLE audit_logs 
+DROP CONSTRAINT audit_logs_patient_id_fkey;
+
+-- Add it back with ON DELETE CASCADE
+ALTER TABLE audit_logs 
+ADD CONSTRAINT audit_logs_patient_id_fkey 
+FOREIGN KEY (patient_id) REFERENCES patients(patient_id) ON DELETE CASCADE;

@@ -1104,8 +1104,8 @@ export const reopenVisit = async (req, res) => {
     const userRoleId = req.user.role_id;
     const userHospitalId = req.user.hospital_id;
 
-    // Only admins can reopen
-    if (userRoleId > 2) {
+    // Only secretary can reopen
+    if (userRoleId !== 5) {
       return res.status(403).json({
         status: "failed",
         message: "Only administrators can reopen visits"
@@ -1167,5 +1167,91 @@ export const reopenVisit = async (req, res) => {
   } catch (error) {
     console.error('Error reopening visit:', error);
     res.status(500).json({ status: "failed", message: "Server error" });
+  }
+};
+
+export const getOpenVisitsInHospital = async (req, res) => {
+  try {
+    const hospital_id = req.user.hospital_id;
+    const branch_id = req.user.branch_id || null;
+
+    if (!hospital_id) {
+      return res.status(400).json({
+        status: "error",
+        message: "Hospital ID not found for user"
+      });
+    }
+
+    let query = `
+      SELECT 
+        v.visit_id,
+        v.visit_number,
+        v.visit_date,
+        v.visit_type,
+        v.reason_for_visit,
+        v.priority_level,
+        v.admission_status,
+        v.visit_status,
+        v.created_at,
+        p.patient_id,
+        p.first_name AS patient_first_name,
+        p.last_name AS patient_last_name,
+        p.primary_number AS patient_phone,
+        b.branch_name,
+        h.hospital_name
+      FROM visits v
+      LEFT JOIN patients p ON v.patient_id = p.patient_id
+      LEFT JOIN hospitals h ON v.hospital_id = h.hospital_id
+      LEFT JOIN branches b ON v.branch_id = b.branch_id
+      WHERE v.hospital_id = $1
+      AND v.visit_status = 'open'
+    `;
+
+    const params = [hospital_id];
+
+    if (branch_id) {
+      query += ` AND v.branch_id = $2`;
+      params.push(branch_id);
+    }
+
+    query += ` ORDER BY 
+      CASE v.priority_level
+        WHEN 'Emergency' THEN 1
+        WHEN 'Urgent' THEN 2
+        WHEN 'Routine' THEN 3
+        ELSE 4
+      END,
+      v.visit_date DESC, 
+      v.created_at DESC
+    `;
+
+    const result = await pool.query(query, params);
+
+    // Get statistics
+    const emergencyCount = result.rows.filter(v => v.priority_level === 'Emergency').length;
+    const urgentCount = result.rows.filter(v => v.priority_level === 'Urgent').length;
+    const admittedCount = result.rows.filter(v => 
+      v.admission_status?.toLowerCase().includes('admitted')
+    ).length;
+
+    res.status(200).json({
+      status: "success",
+      scope: branch_id ? "branch" : "hospital",
+      total_open_visits: result.rows.length,
+      statistics: {
+        emergency: emergencyCount,
+        urgent: urgentCount,
+        admitted: admittedCount
+      },
+      visits: result.rows
+    });
+
+  } catch (error) {
+    console.error("Error fetching open visits:", error);
+    res.status(500).json({
+      status: "error",
+      message: "Server error",
+      error: error.message
+    });
   }
 };

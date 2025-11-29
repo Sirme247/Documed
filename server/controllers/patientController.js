@@ -10,16 +10,47 @@ const safe = (value) => {
 
 const toNull = (value) => (value === '' ? null : value);
 
+
+
+/**
+ * Generates a unique Patient Medical Record Number (MRN)
+ * Format: H{HOSPITAL_ID}-YYYYMMDD-{RANDOM}
+ * Example: H1-20241126-A8F2
+ */
+const generatePatientMRN = async (client, hospital_id) => {
+  // Get current date in YYYYMMDD format
+  const date = new Date();
+  const dateStr = date.getFullYear() + 
+                  String(date.getMonth() + 1).padStart(2, '0') + 
+                  String(date.getDate()).padStart(2, '0');
+  
+  // Generate 4 random alphanumeric characters
+  const random = Math.random().toString(36).substring(2, 6).toUpperCase();
+  
+  const mrn = `H${hospital_id}-${dateStr}-${random}`;
+  
+  // Check if MRN already exists (very unlikely, but good practice)
+  const exists = await client.query(
+    `SELECT 1 FROM patient_identifiers WHERE patient_mrn = $1 AND hospital_id = $2`,
+    [mrn, hospital_id]
+  );
+  
+  // If by chance it exists, recursively generate a new one
+  if (exists.rows.length > 0) {
+    return generatePatientMRN(client, hospital_id);
+  }
+  
+  return mrn;
+};
+
 export const registerPatient = async (req, res) => {
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
 
-    // const user_hospital_id = req.user.hospital_id;
-
-    const {
+    let {
       first_name, middle_name, last_name, country_of_birth,
-      country_of_residence, national_id, date_of_birth, gender,
+      country_of_residence, national_id, birth_certificate_number, date_of_birth, gender,
       marital_status, blood_type, occupation, address_line,
       email, primary_number, secondary_number, emergency_contact1_name,
       emergency_contact1_number, emergency_contact1_relationship, emergency_contact2_name,
@@ -49,72 +80,61 @@ export const registerPatient = async (req, res) => {
     const request_method = req.method;
     const branch_id = req.user.branch_id || null;
 
-    if (!first_name || !last_name || !country_of_residence || !date_of_birth || !gender || !primary_number ) {
+    // Validation: Required fields
+    if (!first_name || !last_name || !country_of_residence || !date_of_birth || !gender || !primary_number) {
       return res.status(400).json({
         status: "failed",
         message: "Please fill all required fields"
       });
     }
 
+    // Generate MRN if not provided or empty
+    if (!patient_mrn || patient_mrn.trim() === '') {
+      patient_mrn = await generatePatientMRN(client, hospital_id);
+    }
+
+    // Check for existing patient with email, national_id, or birth_certificate_number
     const patientExist = await client.query(
       `SELECT * FROM patients WHERE
-        (email = $1 AND email IS NOT NULL) OR
-        (national_id = $2 AND national_id IS NOT NULL) OR
-        (first_name = $3 AND last_name = $4 AND date_of_birth = $5 AND gender = $6)`,
-      [email, national_id, first_name, last_name, date_of_birth, gender]
+        (email = $1 AND email IS NOT NULL AND email != '') OR
+        (national_id = $2 AND national_id IS NOT NULL AND national_id != '') OR
+        (birth_certificate_number = $3 AND birth_certificate_number IS NOT NULL AND birth_certificate_number != '') OR
+        (first_name = $4 AND last_name = $5 AND date_of_birth = $6 AND gender = $7)`,
+      [email, national_id, birth_certificate_number, first_name, last_name, date_of_birth, gender]
     );
 
     if (patientExist.rows.length > 0) {
       return res.status(400).json({
         status: "failed",
-        message: "Patient with given email or national ID already exists"
+        message: "Patient with given email, national ID, or birth certificate number already exists"
       });
     }
 
     const newPatient = await client.query(
-  `INSERT INTO patients (
-    first_name, middle_name, last_name, country_of_birth, country_of_residence, national_id, 
-    date_of_birth, gender, marital_status, blood_type, occupation, address_line, email,
-    primary_number, secondary_number, emergency_contact1_name, emergency_contact1_number, 
-    emergency_contact1_relationship, emergency_contact2_name, emergency_contact2_number,
-    emergency_contact2_relationship, primary_insurance_provider, primary_insurance_policy_number,
-    secondary_insurance_provider, secondary_insurance_policy_number, ethnicity, preffered_language, religion
-  )
-  VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
-          $21,$22,$23,$24,$25,$26,$27,$28)
-  RETURNING patient_id`,
-  [
-    first_name,
-    middle_name,
-    last_name,
-    country_of_birth,
-    country_of_residence,
-    national_id,
-    date_of_birth,
-    gender,
-    marital_status,
-    blood_type,
-    occupation,
-    address_line,
-    email,
-    primary_number,
-    secondary_number,
-    emergency_contact1_name,
-    emergency_contact1_number,
-    emergency_contact1_relationship,
-    emergency_contact2_name,
-    emergency_contact2_number,
-    emergency_contact2_relationship,
-    toNull(primary_insurance_provider),
-    toNull(primary_insurance_policy_number),
-    toNull(secondary_insurance_provider),
-    toNull(secondary_insurance_policy_number),
-    toNull(ethnicity),
-    toNull(preffered_language),
-    toNull(religion)
-  ]
-);
-
+      `INSERT INTO patients (
+        first_name, middle_name, last_name, country_of_birth, country_of_residence, 
+        national_id, birth_certificate_number, date_of_birth, gender, marital_status, 
+        blood_type, occupation, address_line, email, primary_number, secondary_number, 
+        emergency_contact1_name, emergency_contact1_number, emergency_contact1_relationship, 
+        emergency_contact2_name, emergency_contact2_number, emergency_contact2_relationship, 
+        primary_insurance_provider, primary_insurance_policy_number, secondary_insurance_provider, 
+        secondary_insurance_policy_number, ethnicity, preffered_language, religion
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,
+              $21,$22,$23,$24,$25,$26,$27,$28,$29)
+      RETURNING patient_id`,
+      [
+        first_name, middle_name, last_name, country_of_birth, country_of_residence, 
+        national_id || null, birth_certificate_number || null, date_of_birth, gender, 
+        marital_status, blood_type, occupation, address_line, email || null,
+        primary_number, secondary_number, emergency_contact1_name, emergency_contact1_number,
+        emergency_contact1_relationship, emergency_contact2_name, emergency_contact2_number,
+        emergency_contact2_relationship, primary_insurance_provider || null, 
+        primary_insurance_policy_number || null, secondary_insurance_provider || null,
+        secondary_insurance_policy_number || null, ethnicity || null, 
+        preffered_language || null, religion || null
+      ]
+    );
 
     const patient_id = newPatient.rows[0].patient_id;
 
@@ -124,26 +144,16 @@ export const registerPatient = async (req, res) => {
       [patient_id, hospital_id, patient_mrn]
     );
 
-   await client.query(
-  `INSERT INTO audit_logs (
-    user_id, patient_id, table_name, action_type, old_values, new_values,
-    ip_address, event_type, branch_id, hospital_id, request_method, endpoint
-  ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
-  [
-    user_id,
-    patient_id,
-    'patients',
-    'INSERT',
-    null,
-    null,
-    ip_address,
-    'Create',
-    branch_id,
-    hospital_id,
-    request_method,
-    endpoint
-  ]
-);
+    await client.query(
+      `INSERT INTO audit_logs (
+        user_id, patient_id, table_name, action_type, old_values, new_values,
+        ip_address, event_type, branch_id, hospital_id, request_method, endpoint
+      ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+      [
+        user_id, patient_id, 'patients', 'INSERT', null, null,
+        ip_address, 'Create', branch_id, hospital_id, request_method, endpoint
+      ]
+    );
 
     if (allergen) {
       const allergy = await client.query(
@@ -152,27 +162,18 @@ export const registerPatient = async (req, res) => {
         [patient_id, allergen, reaction, allergy_severity || 'Not Specified', verified || false]
       );
 
-    await client.query(
-  `INSERT INTO audit_logs (
-    user_id, patient_id, table_name, action_type, old_values,
-    ip_address, event_type, branch_id, hospital_id, request_method, endpoint
-  ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
-  [
-    user_id,
-    patient_id,
-    'allergies',
-    'INSERT',
-    null,
-    ip_address,
-    'Create',
-    branch_id,
-    hospital_id,
-    request_method,
-    endpoint
-  ]
-);
-
+      await client.query(
+        `INSERT INTO audit_logs (
+          user_id, patient_id, table_name, action_type, old_values,
+          ip_address, event_type, branch_id, hospital_id, request_method, endpoint
+        ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
+        [
+          user_id, patient_id, 'allergies', 'INSERT', null,
+          ip_address, 'Create', branch_id, hospital_id, request_method, endpoint
+        ]
+      );
     }
+
     if (medication_name) {
       const med = await client.query(
         `INSERT INTO medications (
@@ -192,18 +193,12 @@ export const registerPatient = async (req, res) => {
           ip_address, event_type, branch_id, hospital_id, request_method, endpoint
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [
-          user_id,
-          patient_id,
-          'allergies',
-          'INSERT',
-          null,
-          'Create',
-          branch_id,
-          hospital_id,
-          request_method,
-          endpoint
-        ]);
+          user_id, patient_id, 'medications', 'INSERT', null,
+          ip_address, 'Create', branch_id, hospital_id, request_method, endpoint
+        ]
+      );
     }
+
     if (condition_name) {
       const condition = await client.query(
         `INSERT INTO chronic_conditions (
@@ -217,23 +212,16 @@ export const registerPatient = async (req, res) => {
         ]
       );
 
-    await client.query(
+      await client.query(
         `INSERT INTO audit_logs (
           user_id, patient_id, table_name, action_type, old_values,
           ip_address, event_type, branch_id, hospital_id, request_method, endpoint
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [
-          user_id,
-          patient_id,
-          'chronic_conditions',
-          'INSERT',
-          null,
-          'Create',
-          branch_id,
-          hospital_id,
-          request_method,
-          endpoint
-        ]);
+          user_id, patient_id, 'chronic_conditions', 'INSERT', null,
+          ip_address, 'Create', branch_id, hospital_id, request_method, endpoint
+        ]
+      );
     }
 
     if (relative_condition_name) {
@@ -252,17 +240,10 @@ export const registerPatient = async (req, res) => {
           ip_address, event_type, branch_id, hospital_id, request_method, endpoint
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [
-          user_id,
-          patient_id,
-          'family_history',
-          'INSERT',
-          null,
-          'Create',
-          branch_id,
-          hospital_id,
-          request_method,
-          endpoint
-        ]);
+          user_id, patient_id, 'family_history', 'INSERT', null,
+          ip_address, 'Create', branch_id, hospital_id, request_method, endpoint
+        ]
+      );
     }
 
     if (smoking_status || alcohol_use || drug_use || physical_activity || diet_description || living_situation) {
@@ -283,24 +264,20 @@ export const registerPatient = async (req, res) => {
           ip_address, event_type, branch_id, hospital_id, request_method, endpoint
         ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)`,
         [
-          user_id,
-          patient_id,
-          'social_history',
-          'INSERT',
-          null,
-          'Create',
-          branch_id,
-          hospital_id,
-          request_method,
-          endpoint
-        ]);
+          user_id, patient_id, 'social_history', 'INSERT', null,
+          ip_address, 'Create', branch_id, hospital_id, request_method, endpoint
+        ]
+      );
     }
 
     await client.query("COMMIT");
     res.status(201).json({
       status: "success",
       message: "Patient registered successfully",
-      patient: newPatient.rows[0]
+      patient: {
+        ...newPatient.rows[0],
+        patient_mrn: patient_mrn
+      }
     });
 
   } catch (error) {
@@ -1083,6 +1060,75 @@ export const deletePatient = async (req, res) => {
       status: "success",
       message: "Patient record marked as inactive",
       patient: deletedPatient.rows[0],
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+};
+
+export const reactivatePatient = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const { patient_id } = req.params;
+    const user_id = req.user.user_id;
+    const ip_address = req.ip;
+    const endpoint = req.originalUrl;
+    const request_method = req.method;
+    const branch_id = req.user.branch_id || null;
+
+    const patient = await client.query(
+      "SELECT * FROM patients WHERE patient_id = $1",
+      [patient_id]
+    );
+
+    if (patient.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Patient not found",
+      });
+    }
+
+    if (patient.rows[0].is_active) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Patient is already active",
+      });
+    }
+
+    const reactivatedPatient = await client.query(
+      `UPDATE patients 
+       SET is_active = true, updated_at = NOW()
+       WHERE patient_id = $1
+       RETURNING *`,
+      [patient_id]
+    );
+
+    await logAudit(client, {
+      user_id,
+      patient_id,
+      table_name: "patients",
+      action_type: "UPDATE",
+      old_values: patient.rows[0],
+      new_values: reactivatedPatient.rows[0],
+      ip_address,
+      event_type: "Reactivate Patient",
+      branch_id,
+      hospital_id: req.user.hospital_id || null,
+      request_method,
+      endpoint,
+    });
+
+    await client.query("COMMIT");
+    res.status(200).json({
+      status: "success",
+      message: "Patient reactivated successfully",
+      patient: reactivatedPatient.rows[0],
     });
   } catch (error) {
     await client.query("ROLLBACK");

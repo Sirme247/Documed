@@ -1,6 +1,88 @@
 import { S3Client, PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { pool } from '../libs/database.js';
+import { DeleteObjectCommand } from "@aws-sdk/client-s3";
+
+export const deleteLabTest = async (req, res) => {
+  const connection = await pool.connect();
+  
+  try {
+    const { testId } = req.params;
+    const user = req.user;
+
+    // Permission check
+    const allowedRoles = [1, 2, 3, 6, 7]; // Admin, Doctor, Nurse, Lab Tech
+    if (!allowedRoles.includes(user.role_id)) {
+      return res.status(403).json({
+        status: "failed",
+        message: "You do not have permission to delete lab tests"
+      });
+    }
+
+    await connection.query('BEGIN');
+
+    // Get lab test with visit status
+    const result = await connection.query(
+      `SELECT lt.*, v.visit_status 
+       FROM lab_tests lt
+       JOIN visits v ON lt.visit_id = v.visit_id
+       WHERE lt.lab_test_id = $1`,
+      [testId]
+    );
+
+    if (result.rows.length === 0) {
+      await connection.query('ROLLBACK');
+      return res.status(404).json({
+        status: "failed",
+        message: "Lab test not found"
+      });
+    }
+
+    const labTest = result.rows[0];
+
+    // Only admin can delete from closed visits
+    if (labTest.visit_status === 'closed' && user.role_id !== 1) {
+      await connection.query('ROLLBACK');
+      return res.status(403).json({
+        status: "failed",
+        message: "Cannot delete from closed visit"
+      });
+    }
+
+    // Delete PDF from S3
+    if (labTest.pdf_key) {
+      const deleteCommand = new DeleteObjectCommand({
+        Bucket: BUCKET_NAME,
+        Key: labTest.pdf_key
+      });
+      await s3Client.send(deleteCommand);
+    }
+
+    // Delete from database
+    await connection.query(
+      `DELETE FROM lab_tests WHERE lab_test_id = $1`,
+      [testId]
+    );
+
+    await connection.query('COMMIT');
+
+    res.status(200).json({
+      status: "success",
+      message: "Lab test deleted successfully"
+    });
+
+  } catch (error) {
+    await connection.query('ROLLBACK');
+    console.error("Error deleting lab test:", error);
+    res.status(500).json({
+      status: "failed",
+      message: "Failed to delete lab test",
+      error: error.message
+    });
+  } finally {
+    connection.release();
+  }
+};
 
 const s3Client = new S3Client({
   region: process.env.AWS_REGION || "us-east-1",

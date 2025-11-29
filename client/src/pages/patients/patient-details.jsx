@@ -21,9 +21,22 @@ const PatientDetails = () => {
   });
   const [recentVisits, setRecentVisits] = useState([]);
   const [activeTab, setActiveTab] = useState("overview");
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showDeactivateModal, setShowDeactivateModal] = useState(false);
+  const [showReactivateModal, setShowReactivateModal] = useState(false);
+  const [deleteType, setDeleteType] = useState(""); // "soft" or "hard"
+  const [deactivateConfirmText, setDeactivateConfirmText] = useState("");
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [reactivateConfirmText, setReactivateConfirmText] = useState("");
 
-  // Check if user is role_id 3 or 4
+  // Check if user is role_id 3 or 4 (doctors)
   const isDoctor = user?.role_id === 3 || user?.role_id === 4;
+  
+  // Check if user is role_id 5 (restricted user - e.g., receptionist)
+  const isReceptionist = user?.role_id === 5;
+  
+  // Check if user is admin (role_id 1)
+  const isAdmin = user?.role_id === 1;
 
   // Fetch patient details
   useEffect(() => {
@@ -50,6 +63,82 @@ const PatientDetails = () => {
       fetchPatientDetails();
     }
   }, [patient_id, navigate]);
+
+  // Handle patient reactivation
+  const handleReactivatePatient = async () => {
+    // Validate confirmation text
+    const expectedText = `${patient.first_name} ${patient.last_name}`.toLowerCase();
+    if (reactivateConfirmText.toLowerCase() !== expectedText) {
+      toast.error("Patient name does not match. Please type the exact name.");
+      return;
+    }
+
+    try {
+      const { data } = await api.put(`/patients/reactivate-patient/${patient_id}`);
+      
+      if (data.status === "success") {
+        toast.success("Patient reactivated successfully");
+        setShowReactivateModal(false);
+        setReactivateConfirmText("");
+        // Refresh patient data
+        const updatedData = await api.get(`/patients/get-patient/${patient_id}`);
+        if (updatedData.data.status === "success") {
+          setPatient(updatedData.data.data.patient);
+        }
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.response?.data?.message || "Failed to reactivate patient");
+    }
+  };
+
+  // Handle patient deactivation
+  const handleDeactivatePatient = async () => {
+    // Validate confirmation text
+    const expectedText = `${patient.first_name} ${patient.last_name}`.toLowerCase();
+    if (deactivateConfirmText.toLowerCase() !== expectedText) {
+      toast.error("Patient name does not match. Please type the exact name.");
+      return;
+    }
+
+    try {
+      const { data } = await api.delete(`/patients/delete-patient/${patient_id}`);
+      
+      if (data.status === "success") {
+        toast.success("Patient deactivated successfully");
+        setShowDeactivateModal(false);
+        setDeactivateConfirmText("");
+        navigate("/patients");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.response?.data?.message || "Failed to deactivate patient");
+    }
+  };
+
+  // Handle permanent deletion
+  const handlePermanentDelete = async () => {
+    // Validate confirmation text
+    const expectedText = `${patient.first_name} ${patient.last_name}`.toLowerCase();
+    if (deleteConfirmText.toLowerCase() !== expectedText) {
+      toast.error("Patient name does not match. Please type the exact name.");
+      return;
+    }
+
+    try {
+      const { data } = await api.delete(`/patients/hard-delete-patient/${patient_id}`);
+      
+      if (data.status === "success") {
+        toast.success("Patient permanently deleted");
+        setShowDeleteModal(false);
+        setDeleteConfirmText("");
+        navigate("/patients");
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.response?.data?.message || "Failed to delete patient");
+    }
+  };
 
   // Calculate age
   const calculateAge = (dob) => {
@@ -106,7 +195,6 @@ const PatientDetails = () => {
     );
   }
 
-  // Get only the 4 most recent visits
   const displayedVisits = recentVisits.slice(0, 4);
   const hasMoreVisits = recentVisits.length > 0;
 
@@ -117,27 +205,260 @@ const PatientDetails = () => {
         <h2>Patient Details</h2>
       
         <div className="header-actions">
-          <button 
-          onClick={() => navigate(`/ai-summary/${patient.patient_id}`, { state: { patient } })} 
-          className="btn-primary"
-        >
-          Patient Summary
-        </button>
+          {/* Admin-specific buttons */}
+          {isAdmin && (
+            <>
+              {patient.is_active ? (
+                <button 
+                  onClick={() => {
+                    setDeleteType("soft");
+                    setShowDeactivateModal(true);
+                  }} 
+                  className="btn-warning"
+                >
+                  Deactivate Patient
+                </button>
+              ) : (
+                <button 
+                  onClick={() => {
+                    setShowReactivateModal(true);
+                  }} 
+                  className="btn-success"
+                >
+                  Reactivate Patient
+                </button>
+              )}
+              <button 
+                onClick={() => {
+                  setDeleteType("hard");
+                  setShowDeleteModal(true);
+                }} 
+                className="btn-danger"
+              >
+                Permanently Delete
+              </button>
+            </>
+          )}
 
-          <button
-           onClick={() => navigate(`/patients/${patient.patient_id}/edit`, { state: { patient } })} 
-           className="btn-secondary"
-          >
-            Edit Patient
+          {/* Non-admin buttons */}
+          {!isAdmin && !isReceptionist && (
+            <>
+              <button 
+                onClick={() => navigate(`/ai-summary/${patient.patient_id}`, { state: { patient } })} 
+                className="btn-primary"
+              >
+                Patient Summary
+              </button>
+              <button
+                onClick={() => navigate(`/patients/${patient.patient_id}/edit`, { state: { patient } })} 
+                className="btn-secondary"
+              >
+                Edit Patient
+              </button>
+              <button 
+                onClick={() => navigate("/visits/new", { state: { patient } })} 
+                className="btn-primary"
+              >
+                New Visit
+              </button>
+            </>
+          )}
+
+          {/* Receptionist sees only edit button */}
+          {isReceptionist && (
+            <button
+              onClick={() => navigate(`/patients/${patient.patient_id}/edit`, { state: { patient } })} 
+              className="btn-secondary"
+            >
+              Edit Patient
             </button>
-          <button 
-            onClick={() => navigate("/visits/new", { state: { patient } })} 
-            className="btn-primary"
-          >
-            New Visit
-          </button>
+          )}
         </div>
       </div>
+
+      {/* Reactivation Confirmation Modal */}
+      {showReactivateModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Reactivate Patient</h3>
+            <p>Are you sure you want to reactivate this patient?</p>
+            <p><strong>{patient.first_name} {patient.last_name}</strong></p>
+            <p className="modal-success">
+              This will mark the patient as active again and restore full access to their records.
+            </p>
+            <div className="confirmation-input-section">
+              <label>
+                To confirm, please type the patient's full name: <strong>{patient.first_name} {patient.last_name}</strong>
+              </label>
+              <input
+                type="text"
+                value={reactivateConfirmText}
+                onChange={(e) => setReactivateConfirmText(e.target.value)}
+                placeholder="Enter patient's full name"
+                className="confirmation-input"
+              />
+            </div>
+            <div className="modal-actions">
+              <button 
+                onClick={() => {
+                  setShowReactivateModal(false);
+                  setReactivateConfirmText("");
+                }} 
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleReactivatePatient} 
+                className="btn-success"
+                disabled={reactivateConfirmText.toLowerCase() !== `${patient.first_name} ${patient.last_name}`.toLowerCase()}
+              >
+                Reactivate Patient
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Reactivation Confirmation Modal */}
+      {showReactivateModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Reactivate Patient</h3>
+            <p>Are you sure you want to reactivate this patient?</p>
+            <p><strong>{patient.first_name} {patient.last_name}</strong></p>
+            <p className="modal-success">
+              This will mark the patient as active again and restore full access to their records.
+            </p>
+            <div className="confirmation-input-section">
+              <label>
+                To confirm, please type the patient's full name: <strong>{patient.first_name} {patient.last_name}</strong>
+              </label>
+              <input
+                type="text"
+                value={reactivateConfirmText}
+                onChange={(e) => setReactivateConfirmText(e.target.value)}
+                placeholder="Enter patient's full name"
+                className="confirmation-input"
+              />
+            </div>
+            <div className="modal-actions">
+              <button 
+                onClick={() => {
+                  setShowReactivateModal(false);
+                  setReactivateConfirmText("");
+                }} 
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleReactivatePatient} 
+                className="btn-success"
+                disabled={reactivateConfirmText.toLowerCase() !== `${patient.first_name} ${patient.last_name}`.toLowerCase()}
+              >
+                Reactivate Patient
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deactivation Confirmation Modal */}
+      {showDeactivateModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>Deactivate Patient</h3>
+            <p>Are you sure you want to deactivate this patient?</p>
+            <p><strong>{patient.first_name} {patient.last_name}</strong></p>
+            <p className="modal-warning">
+              This will mark the patient as inactive. The patient record will be preserved 
+              and can be reactivated later.
+            </p>
+            <div className="confirmation-input-section">
+              <label>
+                To confirm, please type the patient's full name: <strong>{patient.first_name} {patient.last_name}</strong>
+              </label>
+              <input
+                type="text"
+                value={deactivateConfirmText}
+                onChange={(e) => setDeactivateConfirmText(e.target.value)}
+                placeholder="Enter patient's full name"
+                className="confirmation-input"
+              />
+            </div>
+            <div className="modal-actions">
+              <button 
+                onClick={() => {
+                  setShowDeactivateModal(false);
+                  setDeactivateConfirmText("");
+                }} 
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handleDeactivatePatient} 
+                className="btn-warning"
+                disabled={deactivateConfirmText.toLowerCase() !== `${patient.first_name} ${patient.last_name}`.toLowerCase()}
+              >
+                Deactivate Patient
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Permanent Deletion Confirmation Modal */}
+      {showDeleteModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>⚠️ Permanent Deletion Warning</h3>
+            <p>Are you sure you want to <strong>permanently delete</strong> this patient?</p>
+            <p><strong>{patient.first_name} {patient.last_name}</strong></p>
+            <div className="modal-danger-warning">
+              <p><strong>This action cannot be undone!</strong></p>
+              <p>All associated records will be permanently deleted:</p>
+              <ul>
+                <li>Patient demographics</li>
+                <li>Medical history (allergies, medications, conditions)</li>
+                <li>Visit records</li>
+                <li>Hospital identifiers</li>
+              </ul>
+            </div>
+            <div className="confirmation-input-section">
+              <label>
+                To confirm permanent deletion, please type the patient's full name: <strong>{patient.first_name} {patient.last_name}</strong>
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Enter patient's full name"
+                className="confirmation-input"
+              />
+            </div>
+            <div className="modal-actions">
+              <button 
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText("");
+                }} 
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handlePermanentDelete} 
+                className="btn-danger"
+                disabled={deleteConfirmText.toLowerCase() !== `${patient.first_name} ${patient.last_name}`.toLowerCase()}
+              >
+                Permanently Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Patient Summary Card */}
       <div className="patient-summary-card">
@@ -174,8 +495,8 @@ const PatientDetails = () => {
         </div>
       </div>
 
-      {/* Alert Badges */}
-      {(medicalHistory.allergies.length > 0 || medicalHistory.chronic_conditions.length > 0) && (
+      {/* Alert Badges - Hide from receptionists and admins */}
+      {!isReceptionist && !isAdmin && (medicalHistory.allergies.length > 0 || medicalHistory.chronic_conditions.length > 0) && (
         <div className="alert-badges">
           {medicalHistory.allergies.length > 0 && (
             <div className="alert-badge alert-warning">
@@ -207,14 +528,16 @@ const PatientDetails = () => {
           >
             Overview
           </button>
-          <button 
-            className={`tab ${activeTab === "medical" ? "active" : ""}`}
-            onClick={() => setActiveTab("medical")}
-          >
-            Medical History
-          </button>
           
-          {/* Only show Visits tab to doctors (role_id 3 or 4) */}
+          {!isReceptionist && !isAdmin && (
+            <button 
+              className={`tab ${activeTab === "medical" ? "active" : ""}`}
+              onClick={() => setActiveTab("medical")}
+            >
+              Medical History
+            </button>
+          )}
+          
           {isDoctor && (
             <button 
               className={`tab ${activeTab === "visits" ? "active" : ""}`}
@@ -233,19 +556,10 @@ const PatientDetails = () => {
         </div>
       </div>
 
-      {/* Restricted Access Message */}
-      {!isDoctor && activeTab === "visits" && (
-        <div className="access-denied-banner">
-          <p>Only doctors can access the Visits tab.</p>
-        </div>
-      )}
-
-      {/* Tab Content */}
+      {/* Tab Content - Rest remains the same */}
       <div className="tab-content">
-        {/* Overview Tab */}
         {activeTab === "overview" && (
           <div className="overview-grid">
-            {/* Personal Information */}
             <div className="info-card">
               <h3>Personal Information</h3>
               <div className="info-grid">
@@ -292,44 +606,53 @@ const PatientDetails = () => {
               </div>
             </div>
 
-            {/* Quick Medical Summary */}
             <div className="info-card">
-              <h3>Medical Summary</h3>
+              <h3>Quick Summary</h3>
               <div className="medical-summary">
-                <div className="summary-item">
-                  <div className="summary-count">{medicalHistory.allergies.length}</div>
-                  <div className="summary-label">Allergies</div>
-                </div>
-                <div className="summary-item">
-                  <div className="summary-count">
-                    {medicalHistory.medications.filter(m => m.medication_is_active).length}
-                  </div>
-                  <div className="summary-label">Active Medications</div>
-                </div>
-                <div className="summary-item">
-                  <div className="summary-count">
-                    {medicalHistory.chronic_conditions.filter(c => c.is_active).length}
-                  </div>
-                  <div className="summary-label">Chronic Conditions</div>
-                </div>
+                {!isReceptionist && !isAdmin && (
+                  <>
+                    <div className="summary-item">
+                      <div className="summary-count">{medicalHistory.allergies.length}</div>
+                      <div className="summary-label">Allergies</div>
+                    </div>
+                    <div className="summary-item">
+                      <div className="summary-count">
+                        {medicalHistory.medications.filter(m => m.medication_is_active).length}
+                      </div>
+                      <div className="summary-label">Active Medications</div>
+                    </div>
+                    <div className="summary-item">
+                      <div className="summary-count">
+                        {medicalHistory.chronic_conditions.filter(c => c.is_active).length}
+                      </div>
+                      <div className="summary-label">Chronic Conditions</div>
+                    </div>
+                  </>
+                )}
                 <div className="summary-item">
                   <div className="summary-count">{recentVisits.length}</div>
-                  <div className="summary-label">Recent Visits</div>
+                  <div className="summary-label">Total Visits</div>
+                </div>
+                <div className="summary-item">
+                  <div className="summary-count">
+                    {patient.is_active ? "Active" : "Inactive"}
+                  </div>
+                  <div className="summary-label">Patient Status</div>
                 </div>
               </div>
             </div>
           </div>
         )}
-
-        {/* Medical History Tab */}
-        {activeTab === "medical" && (
+       
+        {/* Medical History Tab - Only accessible to non-receptionists */}
+        {activeTab === "medical" && !isReceptionist && (
           <div className="medical-content">
             {/* Allergies */}
             <div className="info-card">
               <h3>Allergies</h3>
               <button
-               onClick={() => navigate(`/patients/add-allergy`, { state: { patient } })} 
-           className="btn-secondary"
+                onClick={() => navigate(`/patients/add-allergy`, { state: { patient } })} 
+                className="btn-secondary"
               >
                 Add Allergy
               </button>
@@ -361,9 +684,9 @@ const PatientDetails = () => {
             {/* Medications */}
             <div className="info-card">
               <h3>Medications</h3>
-               <button
-               onClick={() => navigate(`/patients/add-medication`, { state: { patient } })} 
-           className="btn-secondary"
+              <button
+                onClick={() => navigate(`/patients/add-medication`, { state: { patient } })} 
+                className="btn-secondary"
               >
                 Add Medication
               </button>
@@ -400,9 +723,9 @@ const PatientDetails = () => {
             {/* Chronic Conditions */}
             <div className="info-card">
               <h3>Chronic Conditions</h3>
-               <button
-               onClick={() => navigate(`/patients/add-chronic-conditions`, { state: { patient } })} 
-           className="btn-secondary"
+              <button
+                onClick={() => navigate(`/patients/add-chronic-conditions`, { state: { patient } })} 
+                className="btn-secondary"
               >
                 Add Chronic Condition
               </button>
@@ -449,9 +772,9 @@ const PatientDetails = () => {
             {/* Family History */}
             <div className="info-card">
               <h3>Family History</h3>
-               <button
-               onClick={() => navigate(`/patients/add-family-history`, { state: { patient } })} 
-           className="btn-secondary"
+              <button
+                onClick={() => navigate(`/patients/add-family-history`, { state: { patient } })} 
+                className="btn-secondary"
               >
                 Add Family History
               </button>
@@ -566,8 +889,8 @@ const PatientDetails = () => {
                         )}
                       </div>
                       <button
-                       onClick={() => navigate(`/visits/details/${visit.visit_id}`)}
-                       className="btn-view-visit">View Full Visit</button>
+                        onClick={() => navigate(`/visits/details/${visit.visit_id}`)}
+                        className="btn-view-visit">View Full Visit</button>
                     </div>
                   ))}
                 </div>

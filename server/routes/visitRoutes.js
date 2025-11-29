@@ -5,7 +5,7 @@ import { registerVisit,recordVitals,recordDiagnosis,
     getVisitsList,getHospitalVisitsForDay, visitsInHospital,getVisitPermissions,
   updateVisit,
   closeVisit,
-  reopenVisit
+  reopenVisit,getOpenVisitsInHospital
 } from '../controllers/visitController.js';
 
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
@@ -30,6 +30,8 @@ router.post('/record-treatment',authMiddleware, recordTreatments);
 router.post('/record-visit-prescriptions',authMiddleware, recordVisitPrescriptions);
 router.post('/record-lab-tests',authMiddleware, RecordLabTests);
 router.post('/record-imaging-results',authMiddleware, recordImagingResults);
+
+router.get('/hospital/open-visits',authMiddleware, getOpenVisitsInHospital);
 
 router.get('/:visit_id/permissions', getVisitPermissions);
 

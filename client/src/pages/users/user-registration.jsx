@@ -32,6 +32,8 @@ const UserRegistrationSchema = z.object({
   license_number: z.string().optional(),
   license_expiry: z.string().optional(),
   specialization: z.string().optional(),
+  country: z.string().optional(),
+  start_date: z.string().optional(),
 }).refine((data) => {
   if (data.role_id === "3" || data.role_id === "4") {
     return data.license_number && data.license_number.length > 0;
@@ -40,6 +42,14 @@ const UserRegistrationSchema = z.object({
 }, {
   message: "License number is required for doctors and nurses",
   path: ["license_number"]
+}).refine((data) => {
+  if (data.role_id === "3" || data.role_id === "4") {
+    return data.country && data.country.length > 0;
+  }
+  return true;
+}, {
+  message: "Country is required for healthcare providers",
+  path: ["country"]
 });
 
 const UserRegistration = () => {
@@ -63,11 +73,15 @@ const UserRegistration = () => {
     mode: "onBlur",
     defaultValues: {
       hospital_id: prefilledFromNavigation?.hospital_id || '',
-      branch_id: prefilledFromNavigation?.branch_id || ''
+      branch_id: prefilledFromNavigation?.branch_id || '',
+      start_date: new Date().toISOString().split('T')[0],
     }
   });
 
   const roleId = watch("role_id");
+  const firstName = watch("first_name");
+  const lastName = watch("last_name");
+  const dateOfBirth = watch("date_of_birth");
 
   // Prefill logic with priority: Navigation state > User's hospital/branch
   useEffect(() => {
@@ -90,6 +104,26 @@ const UserRegistration = () => {
       }
     }
   }, [user, prefilledFromNavigation, setValue]);
+
+  /**
+   * Generate username: FirstInitial + LastName + BirthYear + Random2Digits
+   * Example: John Doe born 1990 -> jdoe90XX
+   */
+  const generateUsername = () => {
+    if (!firstName || !lastName) {
+      toast.error("Please enter first and last name first");
+      return;
+    }
+
+    const firstInitial = firstName.charAt(0).toLowerCase();
+    const cleanLastName = lastName.toLowerCase().replace(/\s+/g, '');
+    const birthYear = dateOfBirth ? dateOfBirth.split('-')[0].slice(-2) : '';
+    const randomDigits = Math.floor(10 + Math.random() * 90); // Random 2 digits (10-99)
+
+    const username = `${firstInitial}${cleanLastName}${birthYear}${randomDigits}`;
+    setValue("username", username);
+    toast.success(`Username generated: ${username}`);
+  };
 
   const onSubmit = async (data) => {
     console.log("Form data being sent:", data);
@@ -127,6 +161,7 @@ const UserRegistration = () => {
                     last_name: existingDoctor.last_name,
                     email: existingDoctor.email,
                     license_number: existingDoctor.license_number,
+                    country: existingDoctor.country,
                     specialization: existingDoctor.specialization,
                     current_hospitals: existingDoctor.current_hospitals
                   }
@@ -173,15 +208,15 @@ const UserRegistration = () => {
       // Global Admin can register any role
       return [
         { value: "2", label: "Hospital Admin" },
-       { value: "3", label: "Medical Practitioner(e.g. doctors)" },
-        { value: "4", label: "Medical Staff(e.g Nurses)" },
+        { value: "3", label: "Medical Practitioner (e.g. doctors)" },
+        { value: "4", label: "Medical Staff (e.g Nurses)" },
         { value: "5", label: "Receptionist" }
       ];
     } else if (user?.role_id === 2) {
       // Local Admin can only register Medical Practitioner, Medical Staff, and Receptionist
       return [
-        { value: "3", label: "Medical Practitioner(e.g. doctors)" },
-        { value: "4", label: "Medical Staff(e.g Nurses)" },
+        { value: "3", label: "Medical Practitioner (e.g. doctors)" },
+        { value: "4", label: "Medical Staff (e.g Nurses)" },
         { value: "5", label: "Receptionist" }
       ];
     }
@@ -189,6 +224,12 @@ const UserRegistration = () => {
   };
 
   const availableRoles = getAvailableRoles();
+
+  // Calculate max date (18 years ago for minimum age)
+  const today = new Date();
+  const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
+    .toISOString()
+    .split('T')[0];
 
   return (
     <div className="user-registration">
@@ -226,7 +267,7 @@ const UserRegistration = () => {
           <div className="form-row">
             <div className="form-group">
               <label>First Name *</label>
-              <input {...register("first_name")} />
+              <input {...register("first_name")} placeholder="John" />
               {errors.first_name && (
                 <div className="error-message">{errors.first_name.message}</div>
               )}
@@ -234,12 +275,12 @@ const UserRegistration = () => {
 
             <div className="form-group">
               <label>Middle Name</label>
-              <input {...register("middle_name")} />
+              <input {...register("middle_name")} placeholder="Optional" />
             </div>
 
             <div className="form-group">
               <label>Last Name *</label>
-              <input {...register("last_name")} />
+              <input {...register("last_name")} placeholder="Doe" />
               {errors.last_name && (
                 <div className="error-message">{errors.last_name.message}</div>
               )}
@@ -249,7 +290,20 @@ const UserRegistration = () => {
           <div className="form-row">
             <div className="form-group">
               <label>Date of Birth</label>
-              <input type="date" {...register("date_of_birth")} />
+              <input 
+                type="date" 
+                {...register("date_of_birth")} 
+                max={maxDate}
+                style={{
+                  padding: '10px',
+                  fontSize: '14px',
+                  border: '1px solid #d1d5db',
+                  borderRadius: '6px'
+                }}
+              />
+              <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                Must be at least 18 years old
+              </small>
             </div>
 
             <div className="form-group">
@@ -273,7 +327,7 @@ const UserRegistration = () => {
           <div className="form-row">
             <div className="form-group">
               <label>Email *</label>
-              <input type="email" {...register("email")} />
+              <input type="email" {...register("email")} placeholder="john.doe@example.com" />
               {errors.email && (
                 <div className="error-message">{errors.email.message}</div>
               )}
@@ -281,13 +335,59 @@ const UserRegistration = () => {
 
             <div className="form-group">
               <label>Contact Info</label>
-              <input {...register("contact_info")} placeholder="Phone number" />
+              <input {...register("contact_info")} placeholder="+254712345678" />
             </div>
           </div>
 
           <div className="form-group">
             <label>Address</label>
-            <input {...register("address_line")} />
+            <input {...register("address_line")} placeholder="123 Main St, Nairobi" />
+          </div>
+        </div>
+
+        <div className="form-section">
+          <h3>Account Details</h3>
+          
+          <div className="form-row">
+            <div className="form-group">
+              <label>Username *</label>
+              <div style={{ display: 'flex', gap: '8px' }}>
+                <input 
+                  {...register("username")} 
+                  placeholder="Will be auto-generated"
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={generateUsername}
+                  className="btn-secondary"
+                  style={{ 
+                    whiteSpace: 'nowrap',
+                    padding: '8px 16px',
+                    fontSize: '14px'
+                  }}
+                >
+                  ✨ 
+                </button>
+              </div>
+              {errors.username && (
+                <div className="error-message">{errors.username.message}</div>
+              )}
+              <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                Format: firstInitial + lastName + birthYear + random digits (e.g., jdoe9047)
+              </small>
+            </div>
+
+            <div className="form-group">
+              <label>Password *</label>
+              <input type="password" {...register("password")} placeholder="Min 6 characters" />
+              {errors.password && (
+                <div className="error-message">{errors.password.message}</div>
+              )}
+              <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                Must contain at least one letter and one number
+              </small>
+            </div>
           </div>
         </div>
 
@@ -296,16 +396,8 @@ const UserRegistration = () => {
           
           <div className="form-row">
             <div className="form-group">
-              <label>Username *</label>
-              <input {...register("username")} />
-              {errors.username && (
-                <div className="error-message">{errors.username.message}</div>
-              )}
-            </div>
-
-            <div className="form-group">
               <label>Employee ID *</label>
-              <input {...register("employee_id")} />
+              <input {...register("employee_id")} placeholder="EMP-2024-001" />
               {errors.employee_id && (
                 <div className="error-message">{errors.employee_id.message}</div>
               )}
@@ -313,11 +405,26 @@ const UserRegistration = () => {
 
             <div className="form-group">
               <label>Department</label>
-              <input {...register("department")} />
+              <input {...register("department")} placeholder="e.g., Cardiology, Administration" />
+            </div>
+
+            <div className="form-group">
+              <label>Role *</label>
+              <select {...register("role_id")}>
+                <option value="">-- Select Role --</option>
+                {availableRoles.map(role => (
+                  <option key={role.value} value={role.value}>
+                    {role.label}
+                  </option>
+                ))}
+              </select>
+              {errors.role_id && (
+                <div className="error-message">{errors.role_id.message}</div>
+              )}
             </div>
           </div>
 
-          <div className="form-row">
+          {/* <div className="form-row">
             <div className="form-group">
               <label>Hospital ID</label>
               <input 
@@ -325,6 +432,7 @@ const UserRegistration = () => {
                 {...register("hospital_id")} 
                 disabled={isHospitalIdLocked}
                 style={isHospitalIdLocked ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+                placeholder="Hospital assignment"
               />
               {isHospitalIdLocked && (
                 <small style={{ color: '#059669', fontSize: '12px', fontWeight: '500' }}>
@@ -340,6 +448,7 @@ const UserRegistration = () => {
                 {...register("branch_id")} 
                 disabled={isBranchIdLocked}
                 style={isBranchIdLocked ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
+                placeholder="Optional branch assignment"
               />
               {isBranchIdLocked && (
                 <small style={{ color: '#059669', fontSize: '12px', fontWeight: '500' }}>
@@ -347,32 +456,26 @@ const UserRegistration = () => {
                 </small>
               )}
             </div>
-          </div>
 
-          <div className="form-row">
-            <div className="form-group">
-              <label>Role *</label>
-              <select {...register("role_id")}>
-                <option value="">-- Select Role --</option>
-                {availableRoles.map(role => (
-                  <option key={role.value} value={role.value}>
-                    {role.label}
-                  </option>
-                ))}
-              </select>
-              {errors.role_id && (
-                <div className="error-message">{errors.role_id.message}</div>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label>Password *</label>
-              <input type="password" {...register("password")} />
-              {errors.password && (
-                <div className="error-message">{errors.password.message}</div>
-              )}
-            </div>
-          </div>
+            {(roleId === "3") && (
+              <div className="form-group">
+                <label>Start Date *</label>
+                <input 
+                  type="date" 
+                  {...register("start_date")}
+                  style={{
+                    padding: '10px',
+                    fontSize: '14px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px'
+                  }}
+                />
+                <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                  Start date at this hospital
+                </small>
+              </div>
+            )}
+          </div> */}
         </div>
 
         {/* Healthcare provider fields */}
@@ -390,14 +493,53 @@ const UserRegistration = () => {
               </div>
 
               <div className="form-group">
-                <label>License Expiry</label>
-                <input type="date" {...register("license_expiry")} />
+                <label>Country of Licensure *</label>
+                <select {...register("country")}>
+                  <option value="">Select country</option>
+                  <option value="Kenya">Kenya</option>
+                  <option value="Uganda">Uganda</option>
+                  <option value="Tanzania">Tanzania</option>
+                  <option value="Rwanda">Rwanda</option>
+                  <option value="Burundi">Burundi</option>
+                  <option value="South Sudan">South Sudan</option>
+                  <option value="Ethiopia">Ethiopia</option>
+                  <option value="Somalia">Somalia</option>
+                  <option value="Nigeria">Nigeria</option>
+                  <option value="Ghana">Ghana</option>
+                  <option value="South Africa">South Africa</option>
+                  <option value="Egypt">Egypt</option>
+                  <option value="Zimbabwe">Zimbabwe</option>
+                  <option value="Zambia">Zambia</option>
+                  <option value="Malawi">Malawi</option>
+                  <option value="Botswana">Botswana</option>
+                  <option value="Namibia">Namibia</option>
+                  <option value="Mozambique">Mozambique</option>
+                  <option value="Other">Other</option>
+                </select>
+                {errors.country && (
+                  <div className="error-message">{errors.country.message}</div>
+                )}
               </div>
 
               <div className="form-group">
-                <label>Specialization</label>
-                <input {...register("specialization")} placeholder="e.g., Cardiology" />
+                <label>License Expiry</label>
+                <input 
+                  type="date" 
+                  {...register("license_expiry")}
+                  min={new Date().toISOString().split('T')[0]}
+                  style={{
+                    padding: '10px',
+                    fontSize: '14px',
+                    border: '1px solid #d1d5db',
+                    borderRadius: '6px'
+                  }}
+                />
               </div>
+            </div>
+
+            <div className="form-group">
+              <label>Specialization</label>
+              <input {...register("specialization")} placeholder="e.g., Cardiology, Pediatrics, General Practice" />
             </div>
           </div>
         )}

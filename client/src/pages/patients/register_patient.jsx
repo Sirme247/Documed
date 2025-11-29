@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import "./patients.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
@@ -25,6 +26,7 @@ const PatientRegistrationSchema = z.object({
   middle_name: z.string().optional(),
   country_of_birth: z.string().optional(),
   national_id: z.string().optional(),
+  birth_certificate_number: z.string().optional(),
   marital_status: z.string().optional(),
   blood_type: z.string().optional(),
   occupation: z.string().optional(),
@@ -96,6 +98,7 @@ const PatientRegistrationSchema = z.object({
 const RegisterPatient = () => {
   const [loading, setLoading] = useState(false);
   const user = useStore((state) => state.user);
+  const navigate = useNavigate();
 
   const {
     register,
@@ -122,34 +125,38 @@ const RegisterPatient = () => {
   }, [user, setValue]);
 
   const onSubmit = async (data) => {
-    console.log("Form data being sent:", data);
+  console.log("Form data being sent:", data);
 
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      // Format data - convert string IDs to numbers
-      const formattedData = {
-        ...data,
-        hospital_id: parseInt(data.hospital_id),
-        relative_patient_id: data.relative_patient_id ? parseInt(data.relative_patient_id) : undefined,
-      };
+    // Format data - convert string IDs to numbers and clean empty MRN
+    const formattedData = {
+      ...data,
+      hospital_id: parseInt(data.hospital_id),
+      relative_patient_id: data.relative_patient_id ? parseInt(data.relative_patient_id) : undefined,
+      patient_mrn: data.patient_mrn?.trim() || undefined, // Remove empty string
+    };
 
-      const { data: res } = await api.post("/patients/register-patient", formattedData);
+    const { data: res } = await api.post("/patients/register-patient", formattedData);
 
-      toast.success(res.message || "Patient registered successfully!");
-      reset({
-        verified: false,
-        medication_is_active: true,
-        is_active: true,
-        hospital_id: user?.hospital_id ? String(user.hospital_id) : "",
+    toast.success(res.message || "Patient registered successfully!");
+    
+    // Show the generated MRN if available
+    if (res.patient?.patient_mrn) {
+      toast.success(`MRN assigned: ${res.patient.patient_mrn}`, {
+        duration: 5000,
       });
-    } catch (error) {
-      console.error(error);
-      toast.error(error?.response?.data?.message || error.message);
-    } finally {
-      setLoading(false);
     }
-  };
+    
+    navigate(`/patients/list`);
+  } catch (error) {
+    console.error(error);
+    toast.error(error?.response?.data?.message || error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="patient-registration">
@@ -161,7 +168,7 @@ const RegisterPatient = () => {
           <h3>Required Information</h3>
 
           <div className="form-row">
-            <div className="form-group">
+            {/* <div className="form-group">
               <label>Hospital ID *</label>
               <input 
                 type="number" 
@@ -177,11 +184,17 @@ const RegisterPatient = () => {
               {errors.hospital_id && (
                 <div className="error-message">{errors.hospital_id.message}</div>
               )}
-            </div>
+            </div> */}
 
             <div className="form-group">
-              <label>Patient MRN *</label>
-              <input {...register("patient_mrn")} placeholder="Medical Record Number" />
+              <label>Patient MRN</label>
+              <input 
+                {...register("patient_mrn")} 
+                placeholder="Leave empty to auto-generate (H1-20241126-A8F2)" 
+              />
+              <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '4px' }}>
+                Medical Record Number (auto-generated if left blank)
+              </small>
               {errors.patient_mrn && (
                 <div className="error-message">{errors.patient_mrn.message}</div>
               )}
@@ -258,6 +271,14 @@ const RegisterPatient = () => {
             <div className="form-group">
               <label>National ID</label>
               <input {...register("national_id")} />
+            </div>
+
+            <div className="form-group">
+              <label>Birth Certificate Number</label>
+              <input {...register("birth_certificate_number")} placeholder="e.g., 123456789" />
+              <small style={{ color: '#6b7280', fontSize: '12px', display: 'block', marginTop: '4px' }}>
+                For minors or those without National ID
+              </small>
             </div>
 
             <div className="form-group">
@@ -584,10 +605,10 @@ const RegisterPatient = () => {
               <input {...register("relationship")} placeholder="e.g., Father, Sister" />
             </div>
 
-            <div className="form-group">
+            {/* <div className="form-group">
               <label>Relative Patient ID (if applicable)</label>
               <input type="number" {...register("relative_patient_id")} />
-            </div>
+            </div> */}
           </div>
 
           <div className="form-row">
@@ -598,7 +619,7 @@ const RegisterPatient = () => {
 
             <div className="form-group">
               <label>Age of Onset</label>
-              <input {...register("age_of_onset")} placeholder="e.g., 45 years" />
+              <input {...register("age_of_onset")} placeholder="e.g., 45" />
             </div>
           </div>
 

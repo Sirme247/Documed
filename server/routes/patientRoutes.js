@@ -3,7 +3,7 @@ import {registerPatient,addAllergies,addMedication,
     addChronicConditions,addFamilyHistory,addSocialHistory,updatePatient,updateSocialHistory,  
       updateAllergy,updateMedication,updateChronicCondition,updateFamilyHistory,getPatientFullProfile, deletePatient
     ,getPatients,getPatientById, searchPatientsInTheWeek, getFrequentlyCheckedPatientsThirtyDays, getAdmittedPatients,
-  dischargePatient, deleteAllergy,deleteChronicCondition,deleteFamilyHistory,deleteMedication} 
+  dischargePatient, deleteAllergy,deleteChronicCondition,deleteFamilyHistory,deleteMedication, reactivatePatient, hardDeletePatient} 
     from '../controllers/patientController.js';
 
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
@@ -36,12 +36,16 @@ router.put('/update-medication', updateMedication);
 router.put('/update-chronic-condition', updateChronicCondition);
 router.put('/update-family-history', updateFamilyHistory);
 router.delete('/delete-patient/:patient_id',requireRole(1), deletePatient)
+router.delete('/hard-delete-patient/:patient_id',requireRole(1), hardDeletePatient)
+
 
 
 router.delete("/delete-allergy", deleteAllergy);
 router.delete("/delete-medication", deleteMedication);
 router.delete("/delete-family-history", deleteFamilyHistory);
 router.delete("/delete-chronic-condition", deleteChronicCondition);
+
+router.put('/reactivate-patient/:patient_id',requireRole(1), reactivatePatient);
 
 
 

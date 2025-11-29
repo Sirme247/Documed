@@ -526,14 +526,6 @@ export const hardDeleteHospital = async (req, res) => {
       });
     }
 
-    
-
-    // await client.query("DELETE FROM branches WHERE hospital_id = $1", [hospital_id]);
-
-    
-    await client.query("DELETE FROM hospitals WHERE hospital_id = $1", [hospital_id]);
-
-   
     await client.query(
       `INSERT INTO audit_logs 
         (user_id, table_name, action_type, old_values, new_values, ip_address, event_type, branch_id, hospital_id, request_method, endpoint)
@@ -548,6 +540,13 @@ export const hardDeleteHospital = async (req, res) => {
         endpoint,
       ]
     );
+
+    // await client.query("DELETE FROM branches WHERE hospital_id = $1", [hospital_id]);
+
+    
+    await client.query("DELETE FROM hospitals WHERE hospital_id = $1", [hospital_id]);
+
+   
 
     await client.query("COMMIT");
     res.status(200).json({
@@ -647,9 +646,6 @@ export const hardDeleteBranch = async (req, res) => {
         message: "Branch not found",
       });
     }
-
-    await client.query("DELETE FROM branches WHERE branch_id = $1", [branch_id]);
-
     await client.query(
       `INSERT INTO audit_logs 
         (user_id, table_name, action_type, old_values, new_values, ip_address, event_type, branch_id, hospital_id, request_method, endpoint)
@@ -665,6 +661,10 @@ export const hardDeleteBranch = async (req, res) => {
       ]
     );
 
+    await client.query("DELETE FROM branches WHERE branch_id = $1", [branch_id]);
+
+    
+
     await client.query("COMMIT");
     res.status(200).json({
       status: "success",
@@ -679,6 +679,7 @@ export const hardDeleteBranch = async (req, res) => {
     client.release();
   }
 };
+
 
 
 
@@ -767,10 +768,11 @@ export const getAllHospitals = async (req, res) => {
     const countResult = await pool.query(countQuery, params);
     const totalHospitals = parseInt(countResult.rows[0].total);
 
+    // UPDATED: Include medical providers from provider_hospitals in branch_count
     const query = `
       SELECT 
         h.*,
-        COUNT(b.branch_id) as branch_count
+        COUNT(DISTINCT b.branch_id) as branch_count
       FROM hospitals h
       LEFT JOIN branches b ON h.hospital_id = b.hospital_id AND b.is_active = true
       ${whereClause}
@@ -781,17 +783,6 @@ export const getAllHospitals = async (req, res) => {
 
     params.push(limit, offset);
     const result = await pool.query(query, params);
-
-    // Log audit
-    // await logAudit({
-    //   user_id,
-    //   table_name: "hospitals",
-    //   action_type: "SELECT",
-    //   event_type: "List Hospitals",
-    //   request_method: req.method,
-    //   endpoint: req.originalUrl,
-    //   ip_address: req.ip
-    // });
 
     res.status(200).json({
       status: "success",
@@ -814,6 +805,7 @@ export const getAllHospitals = async (req, res) => {
     });
   }
 };
+
 
 export const getHospitalById = async (req, res) => {
   try {
@@ -849,15 +841,21 @@ export const getHospitalById = async (req, res) => {
     `;
     const branches = await pool.query(branchesQuery, [hospital_id]);
 
+    // FIXED: Properly combine direct users and medical providers
     const statsQuery = `
       SELECT 
-        COUNT(DISTINCT u.user_id) as total_users,
+        (COUNT(DISTINCT u.user_id) + COUNT(DISTINCT u2.user_id)) as total_users,
         COUNT(DISTINCT p.patient_id) as total_patients,
         COUNT(DISTINCT v.visit_id) as total_visits
       FROM hospitals h
       
-
+      -- Direct hospital users (non-providers)
       LEFT JOIN users u ON h.hospital_id = u.hospital_id
+      
+      -- Medical providers through provider_hospitals
+      LEFT JOIN provider_hospitals ph ON h.hospital_id = ph.hospital_id
+      LEFT JOIN healthcare_providers hp ON ph.provider_id = hp.provider_id
+      LEFT JOIN users u2 ON hp.user_id = u2.user_id
 
       LEFT JOIN patient_identifiers pi ON h.hospital_id = pi.hospital_id
       LEFT JOIN patients p ON pi.patient_id = p.patient_id
@@ -865,18 +863,6 @@ export const getHospitalById = async (req, res) => {
       WHERE h.hospital_id = $1
     `;
     const stats = await pool.query(statsQuery, [hospital_id]);
-
-    // Log audit
-    // await logAudit({
-    //   user_id,
-    //   hospital_id,
-    //   table_name: "hospitals",
-    //   action_type: "SELECT",
-    //   event_type: "View Hospital Details",
-    //   request_method: req.method,
-    //   endpoint: req.originalUrl,
-    //   ip_address: req.ip
-    // });
 
     res.status(200).json({
       status: "success",
@@ -1005,17 +991,6 @@ export const getAllBranches = async (req, res) => {
     params.push(limit, offset);
     const result = await pool.query(query, params);
 
-    // Log audit
-    // await logAudit({
-    //   user_id,
-    //   table_name: "branches",
-    //   action_type: "SELECT",
-    //   event_type: "List Branches",
-    //   request_method: req.method,
-    //   endpoint: req.originalUrl,
-    //   ip_address: req.ip
-    // });
-
     res.status(200).json({
       status: "success",
       data: {
@@ -1037,6 +1012,8 @@ export const getAllBranches = async (req, res) => {
     });
   }
 };
+
+// Part 2: getBranchById - Updated to include medical providers
 
 export const getBranchById = async (req, res) => {
   try {
@@ -1071,29 +1048,25 @@ export const getBranchById = async (req, res) => {
 
     const branch = branchResult.rows[0];
 
+    // UPDATED: Include medical providers from provider_hospitals table
     const statsQuery = `
       SELECT 
-        COUNT(DISTINCT u.user_id) as total_users,
+        COUNT(DISTINCT u.user_id) + COUNT(DISTINCT u2.user_id) as total_users,
         COUNT(DISTINCT v.visit_id) as total_visits
       FROM branches b
+      
+      -- Direct branch users (non-providers)
       LEFT JOIN users u ON b.branch_id = u.branch_id 
+      
+      -- Medical providers through provider_hospitals
+      LEFT JOIN provider_hospitals ph ON b.branch_id = ph.branch_id
+      LEFT JOIN healthcare_providers hp ON ph.provider_id = hp.provider_id
+      LEFT JOIN users u2 ON hp.user_id = u2.user_id
+      
       LEFT JOIN visits v ON b.branch_id = v.branch_id
       WHERE b.branch_id = $1
     `;
     const stats = await pool.query(statsQuery, [branch_id]);
-
-    // Log audit
-    // await logAudit({
-    //   user_id,
-    //   branch_id,
-    //   hospital_id: branch.hospital_id,
-    //   table_name: "branches",
-    //   action_type: "SELECT",
-    //   event_type: "View Branch Details",
-    //   request_method: req.method,
-    //   endpoint: req.originalUrl,
-    //   ip_address: req.ip
-    // });
 
     res.status(200).json({
       status: "success",
@@ -1198,4 +1171,125 @@ export const currentHospitalDetails = async (req, res) => {
   } finally {
     client.release();
   }
+};
+
+export const reactivateHospital = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    
+    const { hospital_id } = req.params;
+    const user_id = req.user?.user_id || null;
+    const ip_address = req.ip;
+    const endpoint = req.originalUrl;
+    const request_method = req.method;
+    const branch_id = req.user?.branch_id || null;
+
+    const hospital = await client.query(
+      "SELECT * FROM hospitals WHERE hospital_id = $1",
+      [hospital_id]
+    );
+
+    if (hospital.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return res.status(404).json({
+        status: "failed",
+        message: "Hospital not found",
+      });
+    }
+
+    const updated = await client.query(
+      `UPDATE hospitals 
+       SET is_active = true, deleted_at = NULL
+       WHERE hospital_id = $1
+       RETURNING *`,
+      [hospital_id]
+    );
+
+    await client.query(
+      `INSERT INTO audit_logs
+        (user_id, table_name, action_type, old_values, new_values, ip_address, event_type, branch_id, hospital_id, request_method, endpoint)
+        VALUES ($1, 'hospitals', 'UPDATE', $2, $3, $4, 'Reactivation', $5, $6, $7, $8)`,
+      [
+        user_id,
+        JSON.stringify(hospital.rows[0]),
+        JSON.stringify(updated.rows[0]),
+        ip_address,
+        branch_id,
+        hospital_id,
+        request_method,
+        endpoint,
+      ]
+    );
+
+    await client.query("COMMIT");
+    
+    res.status(200).json({
+      status: "success",
+      message: "Hospital reactivated successfully",
+      hospital: updated.rows[0],
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  }
+};
+
+export const reactivateHospitalBranch = async (req, res) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const { branch_id } = req.params;
+    const user_id = req.user?.user_id || null;
+    const ip_address = req.ip;
+    const endpoint = req.originalUrl; 
+    const request_method = req.method;  
+    const branch = await client.query(
+      "SELECT * FROM branches WHERE branch_id = $1",
+      [branch_id]
+    );
+    if (branch.rows.length === 0) {
+      return res.status(404).json({
+        status: "failed",
+        message: "Branch not found",
+      });
+    }
+    const updated = await client.query(
+      `UPDATE branches 
+       SET is_active = true 
+        WHERE branch_id = $1
+        RETURNING *`,
+      [branch_id]
+    );  
+    await client.query(
+      `INSERT INTO audit_logs
+        (user_id, table_name, action_type, old_values, new_values, ip_address, event_type, hospital_id, branch_id, request_method, endpoint)
+        VALUES ($1, 'branches', 'UPDATE', $2, $3, $4, 'Reactivation', $5, $6, $7, $8)`,
+      [ 
+        user_id,
+        JSON.stringify(branch.rows[0]),
+        JSON.stringify(updated.rows[0]),
+        ip_address,
+        updated.rows[0].hospital_id,
+        branch_id,  
+        request_method,
+        endpoint,
+      ] 
+    );  
+    await client.query("COMMIT");
+    res.status(200).json({
+      status: "success",
+      message: "Branch reactivated successfully",
+      branch: updated.rows[0],
+    });
+  } catch (error) {
+    await client.query("ROLLBACK");
+    console.error(error);
+    res.status(500).json({ message: "Server error" });
+  } finally {
+    client.release();
+  } 
 };

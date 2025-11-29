@@ -48,6 +48,17 @@ const VisitDetails = () => {
   const [selectedLabTest, setSelectedLabTest] = useState(null);
   const [selectedImagingStudy, setSelectedImagingStudy] = useState(null);
 
+  const [showDeleteLabTestModal, setShowDeleteLabTestModal] = useState(false);
+  const [labTestToDelete, setLabTestToDelete] = useState(null);
+
+
+  // ADD THESE TWO NEW ONES:
+  const [showDeleteStudyModal, setShowDeleteStudyModal] = useState(false);
+  const [studyToDelete, setStudyToDelete] = useState(null);
+
+
+  const canDeleteImagingStudy = userRole === 1 || userRole === 3 || userRole === 4;
+
   // Check if user is receptionist (role_id 5)
   const isReceptionist = userRole === 5;
 
@@ -156,6 +167,133 @@ const VisitDetails = () => {
     });
   };
 
+  const DeleteImagingStudyModal = ({ show, onClose, study, onDeleteSuccess }) => {
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [isDeleting, setIsDeleting] = useState(false);
+  const REQUIRED_CONFIRM_TEXT = "DELETE";
+
+  const handleDelete = async () => {
+    if (deleteConfirmText !== REQUIRED_CONFIRM_TEXT) {
+      toast.error(`Please type ${REQUIRED_CONFIRM_TEXT} exactly to confirm deletion`);
+      return;
+    }
+
+    try {
+      setIsDeleting(true);
+      const { data } = await api.delete(`/medical-imaging/studies/${study.imaging_study_id}`);
+
+      if (data.status === "success") {
+        toast.success("Imaging study deleted successfully");
+        setDeleteConfirmText("");
+        onClose();
+        if (onDeleteSuccess) {
+          onDeleteSuccess(study.imaging_study_id);
+        }
+      }
+    } catch (error) {
+      console.error("Error deleting imaging study:", error);
+      toast.error(error?.response?.data?.message || "Failed to delete imaging study");
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleClose = () => {
+    if (!isDeleting) {
+      setDeleteConfirmText("");
+      onClose();
+    }
+  };
+
+  if (!show) return null;
+
+  return (
+    <div className="modal-overlay">
+      <div className="modal-content">
+        <h3>⚠️ Delete Imaging Study</h3>
+        
+        <div className="study-info-section">
+          <p><strong>Study ID:</strong> {study.imaging_study_id}</p>
+          <p><strong>Modality:</strong> {study.modality || "N/A"}</p>
+          <p><strong>Study Date:</strong> {study.study_date 
+            ? formatDate(study.study_date) 
+            : "N/A"}
+          </p>
+          {study.study_description && (
+            <p><strong>Description:</strong> {study.study_description}</p>
+          )}
+        </div>
+
+        <div className="modal-danger-warning">
+          <p><strong>This action cannot be undone!</strong></p>
+          <p>Deleting this imaging study will permanently remove:</p>
+          <ul>
+            <li>All DICOM images and series in this study</li>
+            <li>Study metadata and findings</li>
+            <li>All associated recommendations</li>
+            <li>Data from both the database and Orthanc server</li>
+          </ul>
+          <p className="warning-note">
+            <strong>Note:</strong> The visit record will remain intact, but this 
+            imaging data will be permanently lost.
+          </p>
+        </div>
+
+        <div className="confirmation-input-section">
+          <label>
+            To confirm deletion, please type <strong>{REQUIRED_CONFIRM_TEXT}</strong> below:
+          </label>
+          <input
+            type="text"
+            value={deleteConfirmText}
+            onChange={(e) => setDeleteConfirmText(e.target.value)}
+            placeholder={`Type ${REQUIRED_CONFIRM_TEXT} to confirm`}
+            className="confirmation-input"
+            disabled={isDeleting}
+            autoComplete="off"
+          />
+        </div>
+
+        <div className="modal-actions">
+          <button 
+            onClick={handleClose}
+            className="btn-secondary"
+            disabled={isDeleting}
+          >
+            Cancel
+          </button>
+          <button 
+            onClick={handleDelete}
+            className="btn-danger"
+            disabled={deleteConfirmText !== REQUIRED_CONFIRM_TEXT || isDeleting}
+          >
+            {isDeleting ? "Deleting..." : "Delete Permanently"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const handleDeleteLabTestClick = (test) => {
+    setLabTestToDelete(test);
+    setShowDeleteLabTestModal(true);
+  };
+
+  const handleDeleteLabTestSuccess = (testId) => {
+    setVisitData(prev => ({
+      ...prev,
+      lab_tests: prev.lab_tests.filter(t => t.lab_test_id !== testId)
+    }));
+    
+    if (selectedLabTest?.lab_test_id === testId) {
+      setSelectedLabTest(null);
+    }
+    
+    setLabTestToDelete(null);
+  };
+
+
   // Calculate BMI if not provided
   const calculateBMI = (weight, height, weightUnit, heightUnit) => {
     if (!weight || !height) return null;
@@ -257,6 +395,140 @@ const VisitDetails = () => {
       toast.error('Failed to load PDF');
     }
   };
+  const handleDeleteStudyClick = (study) => {
+  setStudyToDelete(study);
+  setShowDeleteStudyModal(true);
+};
+
+// Handle successful deletion
+const handleDeleteStudySuccess = (studyId) => {
+  // Remove the deleted study from the list
+  setVisitData(prev => ({
+    ...prev,
+    imaging_studies: prev.imaging_studies.filter(s => s.imaging_study_id !== studyId)
+  }));
+  
+  // Close the detail modal if it's showing the deleted study
+  if (selectedImagingStudy?.imaging_study_id === studyId) {
+    setSelectedImagingStudy(null);
+  }
+  
+  setStudyToDelete(null);
+};
+
+
+const DeleteLabTestModal = ({ show, onClose, test, onDeleteSuccess }) => {
+    const [deleteConfirmText, setDeleteConfirmText] = useState("");
+    const [isDeleting, setIsDeleting] = useState(false);
+    const REQUIRED_CONFIRM_TEXT = "DELETE";
+
+    const handleDelete = async () => {
+      if (deleteConfirmText !== REQUIRED_CONFIRM_TEXT) {
+        toast.error(`Please type ${REQUIRED_CONFIRM_TEXT} exactly to confirm deletion`);
+        return;
+      }
+
+      try {
+        setIsDeleting(true);
+        const { data } = await api.delete(`/lab-tests/delete-test/${test.lab_test_id}`);
+
+        if (data.status === "success") {
+          toast.success("Lab test deleted successfully");
+          setDeleteConfirmText("");
+          onClose();
+          if (onDeleteSuccess) {
+            onDeleteSuccess(test.lab_test_id);
+          }
+        }
+      } catch (error) {
+        console.error("Error deleting lab test:", error);
+        toast.error(error?.response?.data?.message || "Failed to delete lab test");
+      } finally {
+        setIsDeleting(false);
+      }
+    };
+
+    const handleClose = () => {
+      if (!isDeleting) {
+        setDeleteConfirmText("");
+        onClose();
+      }
+    };
+
+    if (!show) return null;
+
+    return (
+      <div className="modal-overlay">
+        <div className="modal-content">
+          <h3>⚠️ Delete Lab Test</h3>
+          
+          <div className="study-info-section">
+            <p><strong>Test ID:</strong> {test.lab_test_id}</p>
+            <p><strong>Test Name:</strong> {test.test_name}</p>
+            {test.test_code && (
+              <p><strong>Test Code:</strong> {test.test_code}</p>
+            )}
+            <p><strong>Test Date:</strong> {test.test_date 
+              ? formatDate(test.test_date) 
+              : formatDate(test.created_at)}
+            </p>
+            {test.priority && (
+              <p><strong>Priority:</strong> {test.priority}</p>
+            )}
+          </div>
+
+          <div className="modal-danger-warning">
+            <p><strong>This action cannot be undone!</strong></p>
+            <p>Deleting this lab test will permanently remove:</p>
+            <ul>
+              <li>Test results and findings</li>
+              <li>All recommendations</li>
+              <li>Lab notes</li>
+              {test.pdf_key && <li>Associated PDF report from AWS S3 storage</li>}
+              <li>All related metadata</li>
+            </ul>
+            <p className="warning-note">
+              <strong>Note:</strong> The visit record will remain intact, but this 
+              lab test data will be permanently lost.
+            </p>
+          </div>
+
+          <div className="confirmation-input-section">
+            <label>
+              To confirm deletion, please type <strong>{REQUIRED_CONFIRM_TEXT}</strong> below:
+            </label>
+            <input
+              type="text"
+              value={deleteConfirmText}
+              onChange={(e) => setDeleteConfirmText(e.target.value)}
+              placeholder={`Type ${REQUIRED_CONFIRM_TEXT} to confirm`}
+              className="confirmation-input"
+              disabled={isDeleting}
+              autoComplete="off"
+            />
+          </div>
+
+          <div className="modal-actions">
+            <button 
+              onClick={handleClose}
+              className="btn-secondary"
+              disabled={isDeleting}
+            >
+              Cancel
+            </button>
+            <button 
+              onClick={handleDelete}
+              className="btn-danger"
+              disabled={deleteConfirmText !== REQUIRED_CONFIRM_TEXT || isDeleting}
+            >
+              {isDeleting ? "Deleting..." : "Delete Permanently"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
 
   if (loading) {
     return (
@@ -304,12 +576,12 @@ const VisitDetails = () => {
           )}
 
           {/* Reopen Visit Button - for admins only */}
-          {!isReceptionist && permissions?.visit_status === 'closed' && (
+          {isReceptionist && permissions?.visit_status === 'closed' && (
             <button 
               onClick={handleReopenVisit}
               className="btn-warning"
             >
-              🔓 Reopen Visit
+              Reopen Visit
             </button>
           )}
         </div>
@@ -905,7 +1177,10 @@ const VisitDetails = () => {
         )}
       </div>
 
-      {/* Lab Test Detail Modal - Only for non-receptionists */}
+     
+
+      {/* Imaging Study Detail Modal - Only for non-receptionists */}
+     {/* Lab Test Detail Modal - Only for non-receptionists */}
       {!isReceptionist && selectedLabTest && (
         <div className="lab-imaging-modal-overlay" onClick={() => setSelectedLabTest(null)}>
           <div className="lab-imaging-modal-content" onClick={(e) => e.stopPropagation()}>
@@ -971,7 +1246,21 @@ const VisitDetails = () => {
                   >
                     📄 View Report PDF
                   </button>
+
+                   
+                 {permissions?.visit_status === 'open' && permissions?.can_edit && (
+                  <button 
+                    onClick={() => handleDeleteLabTestClick(selectedLabTest)}
+                    className="btn-danger"
+                    style={{ marginTop: '0.5rem' }}
+                  >
+                    🗑️ Delete Test
+                  </button>
+                )}
+                
                 </div>
+                 
+                
               )}
             </div>
           </div>
@@ -1055,17 +1344,59 @@ const VisitDetails = () => {
                         ⚙️ More Viewers
                       </button>
                     )}
+                     {/* Delete Button - Only for authorized users */}
+                
+                 {/* Delete button only shows for open visits */}
+                  {permissions?.visit_status === 'open' && permissions?.can_edit && (
+                    <button 
+                      onClick={() => handleDeleteStudyClick(selectedImagingStudy)}
+                      className="btn-danger"
+                      style={{ marginTop: '0.5rem' }}
+                    >
+                      🗑️ Delete Study
+                    </button>
+                  )}
+                
                   </>
                 ) : (
                   <p className="lab-imaging-no-viewer-text">Viewer not available for this study</p>
                 )}
+                
+               
               </div>
             </div>
           </div>
         </div>
       )}
+
+      {/* Delete Imaging Study Confirmation Modal */}
+      {studyToDelete && (
+        <DeleteImagingStudyModal
+          show={showDeleteStudyModal}
+          onClose={() => {
+            setShowDeleteStudyModal(false);
+            setStudyToDelete(null);
+          }}
+          study={studyToDelete}
+          onDeleteSuccess={handleDeleteStudySuccess}
+        />
+      )}
+       {/* NEW: Delete Lab Test Confirmation Modal */}
+      {labTestToDelete && (
+        <DeleteLabTestModal
+          show={showDeleteLabTestModal}
+          onClose={() => {
+            setShowDeleteLabTestModal(false);
+            setLabTestToDelete(null);
+          }}
+          test={labTestToDelete}
+          onDeleteSuccess={handleDeleteLabTestSuccess}
+        />
+      )}
     </div>
+    
   );
 };
 
+   
 export default VisitDetails;

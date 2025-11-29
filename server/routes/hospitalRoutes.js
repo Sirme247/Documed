@@ -1,6 +1,6 @@
 import express from 'express';
 import{registerHospital,registerHospitalBranch,updateHospital,updateHospitalBranch,
-    deactivateHospital,deactivateBranch,hardDeleteBranch,hardDeleteHospital,
+    deactivateHospital,deactivateBranch,hardDeleteBranch,hardDeleteHospital, reactivateHospital,reactivateHospitalBranch,
 getAllHospitals,getAllBranches,getBranchById,getHospitalById,
 getBranchesByHospital,currentHospitalDetails} from '../controllers/hospitalController.js';
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
@@ -27,9 +27,13 @@ router.get('/branches/:branch_id', getBranchById);
 
 
 router.put('/hospitals/deactivate/:hospital_id',requireRole(1), deactivateHospital);
-router.put('/hospitals/deactivate/:branch_id',requireRole(1), deactivateBranch);
+router.put('/branches/deactivate/:branch_id',requireRole(1), deactivateBranch);
+
+router.put('/hospitals/reactivate/:hospital_id',requireRole(1), reactivateHospital);
+router.put('/branches/reactivate/:branch_id',requireRole(1), reactivateHospitalBranch);
+
 router.delete('/hospitals/delete/:hospital_id',requireRole(1), hardDeleteHospital);
-router.delete('/hospitals/delete/:branch_id',requireRole(1), hardDeleteBranch);
+router.delete('/branches/delete/:branch_id',requireRole(1), hardDeleteBranch);
 
 
 router.post('/register-hospital', requireRole(1), registerHospital);

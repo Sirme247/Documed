@@ -14,6 +14,13 @@ const BranchDetails = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState("overview");
   const [accessDenied, setAccessDenied] = useState(false);
+  
+  // Modal states
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [showStatusModal, setShowStatusModal] = useState(false);
+  const [deleteConfirmText, setDeleteConfirmText] = useState("");
+  const [statusConfirmText, setStatusConfirmText] = useState("");
+  const [statusAction, setStatusAction] = useState(""); // "activate" or "deactivate"
 
   // Check if user is global admin (no hospital_id)
   const isGlobalAdmin = !user?.hospital_id;
@@ -59,36 +66,47 @@ const BranchDetails = () => {
     });
   };
 
-  const handleDeactivate = async () => {
-    if (!window.confirm("Are you sure you want to deactivate this branch? This will affect all associated users.")) {
+  const handleStatusChange = async () => {
+    const expectedText = branch.branch_name.toLowerCase();
+    if (statusConfirmText.toLowerCase() !== expectedText) {
+      toast.error("Branch name does not match. Please type the exact name.");
       return;
     }
 
     try {
-      const { data } = await api.put(`/hospitals/hospitals/deactivate/${branch_id}`);
+      let response;
+      
+      // Call the correct endpoint based on the action
+      if (statusAction === "deactivate") {
+        response = await api.put(`/hospitals/branches/deactivate/${branch_id}`);
+      } else if (statusAction === "activate") {
+        response = await api.put(`/hospitals/branches/reactivate/${branch_id}`);
+      }
 
-      if (data.status === "success") {
-        toast.success("Branch deactivated successfully");
-        fetchBranchDetails();
+      if (response.data.status === "success") {
+        const message = statusAction === "deactivate" 
+          ? "Branch deactivated successfully" 
+          : "Branch activated successfully";
+        toast.success(message);
+        setShowStatusModal(false);
+        setStatusConfirmText("");
+        setStatusAction("");
+        fetchBranchDetails(); // Refresh the data
       }
     } catch (error) {
-      toast.error(error?.response?.data?.message || "Failed to deactivate branch");
+      toast.error(error?.response?.data?.message || `Failed to ${statusAction} branch`);
     }
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("⚠️ WARNING: This will permanently delete the branch and ALL associated data. This action CANNOT be undone.")) {
-      return;
-    }
-
-    const confirmation = prompt("Type 'DELETE' to confirm permanent deletion:");
-    if (confirmation !== "DELETE") {
-      toast.error("Deletion cancelled - confirmation text did not match");
+    const expectedText = branch.branch_name.toLowerCase();
+    if (deleteConfirmText.toLowerCase() !== expectedText) {
+      toast.error("Branch name does not match. Please type the exact name.");
       return;
     }
 
     try {
-      const { data } = await api.delete(`/hospitals/hospitals/delete/${branch_id}`);
+      const { data } = await api.delete(`/hospitals/branches/delete/${branch_id}`);
 
       if (data.status === "success") {
         toast.success("Branch deleted successfully");
@@ -143,14 +161,120 @@ const BranchDetails = () => {
 
   return (
     <div className="hospital-details-container">
+      {/* Status Change Modal (Activate/Deactivate) */}
+      {showStatusModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>
+              {statusAction === "deactivate" ? "Deactivate Branch" : "Activate Branch"}
+            </h3>
+            <p>
+              Are you sure you want to{" "}
+              <strong>{statusAction === "deactivate" ? "deactivate" : "activate"}</strong> this
+              branch?
+            </p>
+            <p><strong>{branch.branch_name}</strong></p>
+            <p
+              className={
+                statusAction === "deactivate" ? "modal-warning" : "modal-success"
+              }
+            >
+              {statusAction === "deactivate"
+                ? "This will affect all associated users. The branch record will be preserved."
+                : "This will mark the branch as active and restore full access."}
+            </p>
+            <div className="confirmation-input-section">
+              <label>
+                To confirm, please type the branch name: <strong>{branch.branch_name}</strong>
+              </label>
+              <input
+                type="text"
+                value={statusConfirmText}
+                onChange={(e) => setStatusConfirmText(e.target.value)}
+                placeholder="Enter branch name"
+                className="confirmation-input"
+              />
+            </div>
+            <div className="modal-actions">
+              <button
+                onClick={() => {
+                  setShowStatusModal(false);
+                  setStatusConfirmText("");
+                  setStatusAction("");
+                }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleStatusChange}
+                className={statusAction === "deactivate" ? "btn-warning" : "btn-success"}
+                disabled={
+                  statusConfirmText.toLowerCase() !== branch.branch_name.toLowerCase()
+                }
+              >
+                {statusAction === "deactivate" ? "Deactivate Branch" : "Activate Branch"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Deletion Modal */}
+      {showDeleteModal && (
+        <div className="modal-overlay">
+          <div className="modal-content">
+            <h3>⚠️ Permanent Deletion Warning</h3>
+            <p>
+              Are you sure you want to <strong>permanently delete</strong> this branch?
+            </p>
+            <p><strong>{branch.branch_name}</strong></p>
+            <div className="modal-danger-warning">
+              <p><strong>This action cannot be undone!</strong></p>
+              <p>All associated data will be permanently deleted:</p>
+              <ul>
+                <li>Branch information and details</li>
+                <li>Staff and user assignments</li>
+                <li>Visit records associated with this branch</li>
+              </ul>
+            </div>
+            <div className="confirmation-input-section">
+              <label>
+                To confirm permanent deletion, please type the branch name:{" "}
+                <strong>{branch.branch_name}</strong>
+              </label>
+              <input
+                type="text"
+                value={deleteConfirmText}
+                onChange={(e) => setDeleteConfirmText(e.target.value)}
+                placeholder="Enter branch name"
+                className="confirmation-input"
+              />
+            </div>
+            <div className="modal-actions">
+              <button
+                onClick={() => {
+                  setShowDeleteModal(false);
+                  setDeleteConfirmText("");
+                }}
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDelete}
+                className="btn-danger"
+                disabled={deleteConfirmText.toLowerCase() !== branch.branch_name.toLowerCase()}
+              >
+                Permanently Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Header Section */}
       <div className="details-header">
-        {/* <button 
-          onClick={() => navigate(`/dashboard/`)} 
-          className="btn-back"
-        >
-          ← Back 
-        </button> */}
         <div className="header-content">
           <div className="header-left">
             <div className="hospital-icon-large">🏢</div>
@@ -164,41 +288,85 @@ const BranchDetails = () => {
               </p>
             </div>
           </div>
-          
 
-<div className="header-actions">
-  <span className={`status-badge-large ${branch.is_active ? 'active' : 'inactive'}`}>
-    {branch.is_active ? 'Active' : 'Inactive'}
-  </span>
-  <button 
-    onClick={() => navigate('/users/register', {
-      state: {
-        prefillData: {
-          hospital_id: branch.hospital_id,
-          branch_id: branch_id,
-          sourceName: `${branch.branch_name} (${branch.hospital_name})`,
-          returnPath: `/branches/${branch_id}`
-        }
-      }
-    })}
-    className="btn-primary"
-    style={{ backgroundColor: '#10b981' }}
-  >
-    👤 Add User
-  </button>
-  <button 
-    onClick={() => navigate(`/hospitals/branches/${branch_id}/edit`)}
-    className="btn-primary"
-  >
-    ✏️ Edit
-  </button>
-  <button onClick={handleDeactivate} className="btn-danger">
-    🚫 Deactivate
-  </button>
-  <button onClick={handleDelete} className="btn-danger-outline">
-    🗑️ Delete
-  </button>
-</div>
+          <div className="header-actions">
+            <span className={`status-badge-large ${branch.is_active ? 'active' : 'inactive'}`}>
+              {branch.is_active ? 'Active' : 'Inactive'}
+            </span>
+            
+            {/* Add New User Button */}
+            <button 
+              onClick={() => navigate('/users/register', {
+                state: {
+                  prefillData: {
+                    hospital_id: branch.hospital_id,
+                    branch_id: branch_id,
+                    sourceName: `${branch.branch_name} (${branch.hospital_name})`,
+                    returnPath: `/branches/${branch_id}`
+                  }
+                }
+              })}
+              className="btn-primary"
+              style={{ backgroundColor: '#10b981' }}
+            >
+              👤 Add User
+            </button>
+            
+            {/* Add Existing Doctor Button */}
+            <button 
+              onClick={() => navigate('/users/register-existing-doctor', {
+                state: {
+                  prefillData: {
+                    hospital_id: branch.hospital_id, 
+                    branch_id: branch_id, 
+                    sourceName: `${branch.branch_name} (${branch.hospital_name})`,
+                    returnPath: `/branches/${branch_id}`
+                  }
+                }
+              })}
+              className="btn-primary"
+              style={{ backgroundColor: '#8b5cf6' }}
+            >
+              👨‍⚕️ Add Existing Doctor
+            </button>
+            
+            <button 
+              onClick={() => navigate(`/hospitals/branches/${branch_id}/edit`)}
+              className="btn-primary"
+            >
+              ✏️ Edit
+            </button>
+
+            {/* Conditional Status Button */}
+            {branch.is_active ? (
+              <button
+                onClick={() => {
+                  setStatusAction("deactivate");
+                  setShowStatusModal(true);
+                }}
+                className="btn-danger"
+              >
+                🚫 Deactivate
+              </button>
+            ) : (
+              <button
+                onClick={() => {
+                  setStatusAction("activate");
+                  setShowStatusModal(true);
+                }}
+                className="btn-success"
+              >
+                ✅ Activate
+              </button>
+            )}
+
+            <button 
+              onClick={() => setShowDeleteModal(true)} 
+              className="btn-danger-outline"
+            >
+              🗑️ Delete
+            </button>
+          </div>
         </div>
       </div>
 
@@ -296,7 +464,7 @@ const BranchDetails = () => {
                 <div className="info-grid">
                   <div className="info-item full-width">
                     <span className="info-label">📍 Full Address</span>
-                    <span className="info-value">{branch.address}</span>
+                    <span className="info-value">{branch.address_line}</span>
                   </div>
                   <div className="info-item">
                     <span className="info-label">City</span>
@@ -308,21 +476,18 @@ const BranchDetails = () => {
                   </div>
                   <div className="info-item">
                     <span className="info-label">Postal Code</span>
-                    <span className="info-value">{branch.postal_code || "N/A"}</span>
+                    <span className="info-value">{branch.zip_code || "N/A"}</span>
                   </div>
                   <div className="info-item">
                     <span className="info-label">Country</span>
                     <span className="info-value">{branch.country}</span>
                   </div>
-                  
-                  
                 </div>
               </div>
 
               <div className="details-card">
                 <h3>Capacity & Resources</h3>
                 <div className="info-grid">
-                  
                   <div className="info-item">
                     <span className="info-label">👨‍⚕️ Staff Count</span>
                     <span className="info-value">{statistics.total_users || 0}</span>
@@ -365,12 +530,8 @@ const BranchDetails = () => {
                     ) : "N/A"}
                   </span>
                 </div>
-                
-               
               </div>
             </div>
-
-           
           </div>
         )}
 
@@ -402,7 +563,6 @@ const BranchDetails = () => {
                   <span className="info-label">Licensing Authority</span>
                   <span className="info-value">{branch.licensing_authority || "N/A"}</span>
                 </div>
-                
               </div>
             </div>
 
@@ -429,8 +589,6 @@ const BranchDetails = () => {
                 </div>
               </div>
             </div>
-
-            
           </div>
         )}
       </div>

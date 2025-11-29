@@ -8,7 +8,7 @@ import {registerUser,
      userUpdateUser,
     registerExistingMedicalPractitioner,deleteUser,getAllUsers,getUserDetails,getHospitalUsers,
     getUserProfile,
-checkExistingPractitioner,searchDoctor} from '../controllers/userController.js';
+checkExistingPractitioner,searchDoctor, deactivateUser,reactivateUser,deleteUserPermanently} from '../controllers/userController.js';
 import {authMiddleware,requireRole} from '../middleware/authMiddleware.js';
 
 const router = express.Router();
@@ -42,6 +42,10 @@ router.post('/self-register', selfRegister);
 router.get('/check-existing-practitioner', authMiddleware, checkExistingPractitioner);
 router.get('/search-doctor', authMiddleware, searchDoctor);
 router.post('/register-existing-practitioner', authMiddleware, registerExistingMedicalPractitioner);
+
+router.put('/deactivate-user/:user_id', authMiddleware, requireRole(1,2), deactivateUser);
+router.put('/reactivate-user/:user_id', authMiddleware, requireRole(1,2), reactivateUser);
+router.delete('/delete-user-permanently/:user_id', authMiddleware, requireRole(1), deleteUserPermanently);
 
 
 export default router;

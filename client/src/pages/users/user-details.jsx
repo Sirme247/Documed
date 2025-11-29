@@ -2,13 +2,21 @@ import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import api from '../../libs/apiCall';
 import { toast } from 'react-hot-toast';
+import useStore from '../../store/index.js';
 import './users.css';
 
 const UserDetails = () => {
   const { user_id } = useParams();
   const navigate = useNavigate();
+  const currentUser = useStore((state) => state.user);
   const [loading, setLoading] = useState(true);
   const [userData, setUserData] = useState(null);
+  const [modal, setModal] = useState({ type: null, isOpen: false });
+  const [actionLoading, setActionLoading] = useState(false);
+  const [formData, setFormData] = useState({ reason: '', confirmText: '' });
+
+  // Check if current user is admin (role_id 1)
+  const isAdmin = currentUser?.role_id === 1;
 
   useEffect(() => {
     fetchUserDetails();
@@ -76,6 +84,104 @@ const UserDetails = () => {
       default:
         return 'status-badge pending';
     }
+  };
+
+  // Action Handlers
+  const handleDeactivate = async () => {
+    if (!formData.reason.trim()) {
+      toast.error('Please provide a reason');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await api.put(`/users/deactivate-user/${user_id}`, {
+        reason: formData.reason,
+        suspension_type: 'inactive'
+      });
+
+      if (response.data.status === 'success') {
+        toast.success('User deactivated successfully');
+        setModal({ type: null, isOpen: false });
+        setFormData({ reason: '', confirmText: '' });
+        fetchUserDetails();
+      } else {
+        toast.error(response.data.message || 'Failed to deactivate user');
+      }
+    } catch (error) {
+      console.error('Deactivate error:', error);
+      toast.error(error.response?.data?.message || 'Error deactivating user');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleReactivate = async () => {
+    setActionLoading(true);
+    try {
+      const response = await api.put(`/users/reactivate-user/${user_id}`, {
+        reason: formData.reason || 'Account reactivated by admin'
+      });
+
+      if (response.data.status === 'success') {
+        toast.success('User reactivated successfully');
+        setModal({ type: null, isOpen: false });
+        setFormData({ reason: '', confirmText: '' });
+        fetchUserDetails();
+      } else {
+        toast.error(response.data.message || 'Failed to reactivate user');
+      }
+    } catch (error) {
+      console.error('Reactivate error:', error);
+      toast.error(error.response?.data?.message || 'Error reactivating user');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handlePermanentDelete = async () => {
+    if (formData.confirmText !== 'DELETE') {
+      toast.error('You must type "DELETE" to confirm');
+      return;
+    }
+
+    if (!formData.reason.trim()) {
+      toast.error('Please provide a reason for deletion');
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const response = await api.delete(`/users/delete-user-permanently/${user_id}`, {
+        data: {
+          confirmation_text: 'DELETE',
+          reason: formData.reason
+        }
+      });
+
+      if (response.data.status === 'success') {
+        toast.success('User permanently deleted');
+        setModal({ type: null, isOpen: false });
+        setTimeout(() => navigate('/users/list'), 1500);
+      } else {
+        toast.error(response.data.message || 'Failed to delete user');
+      }
+    } catch (error) {
+      console.error('Delete error:', error);
+      toast.error(error.response?.data?.message || 'Error deleting user');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const openModal = (type) => {
+    setFormData({ reason: '', confirmText: '' });
+    setModal({ type, isOpen: true });
+  };
+
+  const closeModal = () => {
+    setModal({ type: null, isOpen: false });
+    setFormData({ reason: '', confirmText: '' });
   };
 
   if (loading) {
@@ -147,10 +253,39 @@ const UserDetails = () => {
         </div>
       </div>
 
+      {/* Action Buttons - Show conditionally based on account status and role */}
+      <div className="action-buttons-group">
+        {user.account_status === 'active' && (
+          <button 
+            onClick={() => openModal('deactivate')} 
+            className="btn-action btn-warning"
+          >
+            🔒 Deactivate Account
+          </button>
+        )}
+        {(user.account_status === 'inactive' || user.account_status === 'suspended') && (
+          <button 
+            onClick={() => openModal('reactivate')} 
+            className="btn-action btn-success"
+          >
+            ✅ Reactivate Account
+          </button>
+        )}
+        {/* Only show delete button to admins (role_id 1) */}
+        {isAdmin && (
+          <button 
+            onClick={() => openModal('delete')} 
+            className="btn-action btn-danger"
+          >
+            🗑️ Delete Permanently
+          </button>
+        )}
+      </div>
+
       {/* Statistics Cards (for providers) */}
       {provider && statistics && (
         <div className="stats-grid">
-          <div className="stat-card primary">
+          {/* <div className="stat-card primary">
             <div className="stat-icon-wrapper primary">
               <span className="stat-icon">🏥</span>
             </div>
@@ -159,9 +294,9 @@ const UserDetails = () => {
               <span className="stat-value">{statistics.total_visits || 0}</span>
               <span className="stat-sublabel">All time</span>
             </div>
-          </div>
+          </div> */}
 
-          <div className="stat-card success">
+          {/* <div className="stat-card success">
             <div className="stat-icon-wrapper success">
               <span className="stat-icon">👥</span>
             </div>
@@ -170,9 +305,9 @@ const UserDetails = () => {
               <span className="stat-value">{statistics.total_patients || 0}</span>
               <span className="stat-sublabel">Unique patients</span>
             </div>
-          </div>
+          </div> */}
 
-          <div className="stat-card info">
+          {/* <div className="stat-card info">
             <div className="stat-icon-wrapper info">
               <span className="stat-icon">📅</span>
             </div>
@@ -181,7 +316,7 @@ const UserDetails = () => {
               <span className="stat-value">{statistics.visits_last_30_days || 0}</span>
               <span className="stat-sublabel">Visits</span>
             </div>
-          </div>
+          </div> */}
 
           <div className="stat-card warning">
             <div className="stat-icon-wrapper warning">
@@ -243,46 +378,7 @@ const UserDetails = () => {
             </div>
           </div>
 
-          {/* Employment Information */}
-          <div className="dashboard-card">
-            <div className="card-header">
-              <h3>Employment Information</h3>
-            </div>
-            <div className="card-content">
-              <div className="info-grid">
-                <div className="info-item">
-                  <span className="info-label">Department</span>
-                  <span className="info-value">{user.department || 'N/A'}</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Role</span>
-                  <span className="info-value">{user.role_name}</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Employment Status</span>
-                  <span className={getStatusBadgeClass(user.employment_status)}>
-                    {user.employment_status}
-                  </span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Account Status</span>
-                  <span className={getStatusBadgeClass(user.account_status)}>
-                    {user.account_status}
-                  </span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Last Login</span>
-                  <span className="info-value">{formatDateTime(user.last_login)}</span>
-                </div>
-                <div className="info-item">
-                  <span className="info-label">Must Change Password</span>
-                  <span className="info-value">{user.must_change_password ? 'Yes' : 'No'}</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Hospital/Branch Information */}
+          {/* Organization Information */}
           <div className="dashboard-card">
             <div className="card-header">
               <h3>Organization Information</h3>
@@ -323,7 +419,7 @@ const UserDetails = () => {
 
               {user.branch_id && (
                 <div className="info-grid" style={{ marginTop: '1.5rem', paddingTop: '1.5rem', borderTop: '2px solid #f1f3f5' }}>
-                <div className="info-item" style={{ gridColumn: '1 / -1' }}>
+                  <div className="info-item" style={{ gridColumn: '1 / -1' }}>
                     <span className="info-label">Branch</span>
                     <span className="info-value">
                       {user.branch_name} ({user.branch_type})
@@ -457,8 +553,188 @@ const UserDetails = () => {
               </div>
             </div>
           </div>
+
+          {/* Employment Information */}
+          <div className="dashboard-card">
+            <div className="card-header">
+              <h3>Employment Information</h3>
+            </div>
+            <div className="card-content">
+              <div className="info-grid">
+                <div className="info-item">
+                  <span className="info-label">Department</span>
+                  <span className="info-value">{user.department || 'N/A'}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Role</span>
+                  <span className="info-value">{user.role_name}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Employment Status</span>
+                  <span className={getStatusBadgeClass(user.employment_status)}>
+                    {user.employment_status}
+                  </span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Account Status</span>
+                  <span className={getStatusBadgeClass(user.account_status)}>
+                    {user.account_status}
+                  </span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Last Login</span>
+                  <span className="info-value">{formatDateTime(user.last_login)}</span>
+                </div>
+                <div className="info-item">
+                  <span className="info-label">Must Change Password</span>
+                  <span className="info-value">{user.must_change_password ? 'Yes' : 'No'}</span>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
+
+      {/* Modal Dialogs */}
+      {modal.isOpen && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            {/* Deactivate Modal */}
+            {modal.type === 'deactivate' && (
+              <>
+                <div className="modal-header">
+                  <h2>🔒 Deactivate User Account</h2>
+                  <button className="modal-close" onClick={closeModal}>✕</button>
+                </div>
+                <div className="modal-body">
+                  <p>You are about to deactivate <strong>{user.first_name} {user.last_name}</strong>'s account.</p>
+                  <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#666' }}>
+                    The user will not be able to access the system until reactivated.
+                  </p>
+                  <div className="form-group">
+                    <label>Reason for deactivation *</label>
+                    <textarea
+                      value={formData.reason}
+                      onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                      placeholder="Enter reason..."
+                      rows="4"
+                      className="form-textarea"
+                    />
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button onClick={closeModal} className="btn-secondary">Cancel</button>
+                  <button 
+                    onClick={handleDeactivate} 
+                    disabled={actionLoading || !formData.reason.trim()}
+                    className="btn-danger"
+                  >
+                    {actionLoading ? 'Processing...' : 'Deactivate'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Reactivate Modal */}
+            {modal.type === 'reactivate' && (
+              <>
+                <div className="modal-header">
+                  <h2>✅ Reactivate User Account</h2>
+                  <button className="modal-close" onClick={closeModal}>✕</button>
+                </div>
+                <div className="modal-body">
+                  <p>You are about to reactivate <strong>{user.first_name} {user.last_name}</strong>'s account.</p>
+                  <p style={{ marginTop: '1rem', fontSize: '0.9rem', color: '#666' }}>
+                    The user will regain access to the system.
+                  </p>
+                  <div className="form-group">
+                    <label>Reason for reactivation (optional)</label>
+                    <textarea
+                      value={formData.reason}
+                      onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                      placeholder="Enter reason..."
+                      rows="4"
+                      className="form-textarea"
+                    />
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button onClick={closeModal} className="btn-secondary">Cancel</button>
+                  <button 
+                    onClick={handleReactivate} 
+                    disabled={actionLoading}
+                    className="btn-success"
+                  >
+                    {actionLoading ? 'Processing...' : 'Reactivate'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Delete Modal */}
+            {modal.type === 'delete' && (
+              <>
+                <div className="modal-header">
+                  <h2 style={{ color: '#dc3545' }}>🗑️ Permanently Delete User</h2>
+                  <button className="modal-close" onClick={closeModal}>✕</button>
+                </div>
+                <div className="modal-body">
+                  <div style={{ 
+                    padding: '1rem', 
+                    backgroundColor: '#fee', 
+                    border: '1px solid #fcc', 
+                    borderRadius: '4px',
+                    marginBottom: '1rem'
+                  }}>
+                    <strong style={{ color: '#dc3545' }}>⚠️ WARNING: This action cannot be undone!</strong>
+                    <p style={{ margin: '0.5rem 0 0 0', fontSize: '0.9rem' }}>
+                      This will permanently delete {user.first_name} {user.last_name}'s account and all associated data.
+                    </p>
+                  </div>
+
+                  <div className="form-group">
+                    <label>Reason for deletion *</label>
+                    <textarea
+                      value={formData.reason}
+                      onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
+                      placeholder="Enter reason..."
+                      rows="3"
+                      className="form-textarea"
+                    />
+                  </div>
+
+                  <div className="form-group">
+                    <label>Type <strong>"DELETE"</strong> to confirm *</label>
+                    <input
+                      type="text"
+                      value={formData.confirmText}
+                      onChange={(e) => setFormData({ ...formData, confirmText: e.target.value })}
+                      placeholder="Type DELETE"
+                      className="form-input"
+                      style={{ fontWeight: 'bold' }}
+                    />
+                    {formData.confirmText !== 'DELETE' && formData.confirmText && (
+                      <p style={{ color: '#dc3545', fontSize: '0.85rem', margin: '0.5rem 0 0 0' }}>
+                        Text must match exactly
+                      </p>
+                    )}
+                  </div>
+                </div>
+                <div className="modal-footer">
+                  <button onClick={closeModal} className="btn-secondary">Cancel</button>
+                  <button 
+                    onClick={handlePermanentDelete} 
+                    disabled={actionLoading || formData.confirmText !== 'DELETE' || !formData.reason.trim()}
+                    className="btn-danger"
+                  >
+                    {actionLoading ? 'Deleting...' : 'Delete Permanently'}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 };

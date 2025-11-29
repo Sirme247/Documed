@@ -45,7 +45,7 @@ const RegisterExistingDoctor = () => {
       license_number: prefilledData?.license_number || '',
       country: prefilledData?.country || '',
       hospital_id: prefillData?.hospital_id?.toString() || user?.hospital_id?.toString() || '',
-      branch_id: user?.branch_id?.toString() || '',
+      branch_id: prefillData?.branch_id?.toString() || user?.branch_id?.toString() || '',
       start_date: new Date().toISOString().split('T')[0],
       is_primary: false
     }
@@ -155,6 +155,33 @@ const RegisterExistingDoctor = () => {
         </div>
       )}
 
+      {/* Prefill Information Banner */}
+      {(prefillData?.hospital_id || prefillData?.branch_id) && (
+        <div style={{
+          backgroundColor: '#f0fdf4',
+          border: '1px solid #86efac',
+          borderRadius: '8px',
+          padding: '16px',
+          marginBottom: '24px'
+        }}>
+          <h4 style={{ margin: '0 0 8px 0', color: '#166534' }}>
+            📍 Assignment Details
+          </h4>
+          <div style={{ fontSize: '14px', color: '#15803d' }}>
+            {prefillData.hospital_id && (
+              <p style={{ margin: '4px 0' }}>
+                <strong>Hospital:</strong> {prefillData.sourceName || `ID: ${prefillData.hospital_id}`}
+              </p>
+            )}
+            {prefillData.branch_id && (
+              <p style={{ margin: '4px 0' }}>
+                <strong>Branch:</strong> ID {prefillData.branch_id}
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
       <form onSubmit={handleSubmit(onSubmit)} className="form">
         {/* Search Section */}
         <div className="form-section">
@@ -251,9 +278,9 @@ const RegisterExistingDoctor = () => {
                 <div>
                   <strong>Specialization:</strong> {(doctorInfo || prefilledData)?.specialization || 'N/A'}
                 </div>
-                <div>
+                {/* <div>
                   <strong>User ID:</strong> {(doctorInfo || prefilledData)?.user_id}
-                </div>
+                </div> */}
               </div>
 
               {(doctorInfo?.current_hospitals || prefilledData?.current_hospitals) && 
@@ -277,7 +304,7 @@ const RegisterExistingDoctor = () => {
         </div>
 
         {/* Hospital Assignment */}
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Hospital Assignment</h3>
 
           <div className="form-row">
@@ -307,7 +334,14 @@ const RegisterExistingDoctor = () => {
                 type="number"
                 {...register('branch_id')} 
                 placeholder="Optional"
+                disabled={!!prefillData?.branch_id}
+                style={prefillData?.branch_id ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
               />
+              {prefillData?.branch_id && (
+                <small style={{ color: '#6b7280', fontSize: '12px' }}>
+                  Pre-filled: Branch {prefillData.branch_id}
+                </small>
+              )}
             </div>
 
             <div className="form-group">
@@ -335,7 +369,7 @@ const RegisterExistingDoctor = () => {
               Check this if this is the doctor's main workplace
             </small>
           </div>
-        </div>
+        </div> */}
 
         <div style={{ display: 'flex', gap: '12px' }}>
           <button 

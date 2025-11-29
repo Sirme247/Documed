@@ -2,6 +2,7 @@ import React, { useState, useEffect } from "react";
 import "./visits.css";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useNavigate } from "react-router-dom";
 import { useForm } from "react-hook-form";
 import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
@@ -25,11 +26,14 @@ const NewVisitSchema = z.object({
   notes: z.string().optional(),
 });
 
+
+
 const NewVisit = () => {
   const [loading, setLoading] = useState(false);
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const user = useStore((state) => state.user);
+  const navigate = useNavigate();
 
   const {
     register,
@@ -126,11 +130,8 @@ const NewVisit = () => {
       const { data: res } = await api.post("/visits/register-visit", formattedData);
 
       toast.success(res.message || "Visit registered successfully!");
-      reset({
-        hospital_id: user?.hospital_id ? String(user.hospital_id) : "",
-        branch_id: user?.branch_id ? String(user.branch_id) : "",
-      });
-      setPatientInfo(null);
+      
+     navigate(`/patients/${data.patient_id}`);
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.message || error.message);
@@ -188,36 +189,36 @@ const NewVisit = () => {
         </div>
 
         {/* Patient and Provider Information */}
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Patient & Provider Details</h3>
 
           <div className="form-row">
             <div className="form-group">
-  <label>Patient ID *</label>
-  <input 
-    type="number" 
-    {...register("patient_id")} 
-    placeholder="Enter patient ID"
-    disabled={true}
-    style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
-  />
-  {errors.patient_id && (
-    <div className="error-message">{errors.patient_id.message}</div>
-  )}
-  {patientInfo && (
-    <div style={{ 
-      marginTop: '8px', 
-      padding: '8px 12px', 
-      backgroundColor: '#d1fae5', 
-      borderRadius: '4px',
-      fontSize: '13px',
-      color: '#065f46',
-    }}>
-      ✓ Patient: {patientInfo.first_name} {patientInfo.last_name} 
-      {patientInfo.date_of_birth && ` (Age: ${new Date().getFullYear() - new Date(patientInfo.date_of_birth).getFullYear()})`}
-    </div>
-  )}
-</div>
+            <label>Patient ID *</label>
+            <input 
+              type="number" 
+              {...register("patient_id")} 
+              placeholder="Enter patient ID"
+              disabled={true}
+              style={{ backgroundColor: '#f3f4f6', cursor: 'not-allowed' }}
+            />
+            {errors.patient_id && (
+              <div className="error-message">{errors.patient_id.message}</div>
+            )}
+            {patientInfo && (
+              <div style={{ 
+                marginTop: '8px', 
+                padding: '8px 12px', 
+                backgroundColor: '#d1fae5', 
+                borderRadius: '4px',
+                fontSize: '13px',
+                color: '#065f46',
+              }}>
+                ✓ Patient: {patientInfo.first_name} {patientInfo.last_name} 
+                {patientInfo.date_of_birth && ` (Age: ${new Date().getFullYear() - new Date(patientInfo.date_of_birth).getFullYear()})`}
+              </div>
+            )}
+          </div>
 
             <div className="form-group">
               <label>Provider ID</label>
@@ -262,7 +263,7 @@ const NewVisit = () => {
               )}
             </div>
           </div>
-        </div>
+        </div> */}
 
         {/* Referral Information */}
         <div className="form-section">

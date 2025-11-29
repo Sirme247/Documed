@@ -7,7 +7,9 @@ import {
   getAuditStatistics,
   getRecentAuditLogs,
   exportAuditLogs,
-  getHospitalAuditLogs
+  getHospitalAuditLogs,
+  manualCleanupAuditLogs, 
+  previewCleanup 
 } from '../controllers/auditController.js';
 
 import { authMiddleware, requireRole } from '../middleware/authMiddleware.js';
@@ -23,5 +25,7 @@ router.get('/audit-logs/export',requireRole(1,2), exportAuditLogs);
 router.get('/audit-logs/:log_id',requireRole(1,2), getAuditLogById);
 router.get('/audit-logs/user/:user_id',requireRole(1,2), getUserAuditLogs);
 router.get('/audit-logs/patient/:patient_id',requireRole(1,2), getPatientAuditLogs);
+router.get('/audit-logs/cleanup/preview',  previewCleanup);
+router.post('/audit-logs/cleanup/run', manualCleanupAuditLogs);
 
 export default router;
