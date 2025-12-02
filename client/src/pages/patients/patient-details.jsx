@@ -877,6 +877,13 @@ const PatientDetails = () => {
                         </span>
                       </div>
                       <p className="visit-date">{formatDateTime(visit.visit_date)}</p>
+                     
+                      {visit.hospital_name && (
+                        <div className="visit-hospital-info">
+                          <strong>Hospital:</strong> {visit.hospital_name}
+                          {visit.branch_name && <span className="branch-name"> - {visit.branch_name}</span>}
+                        </div>
+                      )}
                       {visit.reason_for_visit && (
                         <p className="visit-reason"><strong>Reason:</strong> {visit.reason_for_visit}</p>
                       )}

@@ -2,10 +2,214 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import nodemailer from 'nodemailer'
 import { logAudit } from '../libs/auditLogger.js';
-
-
+   
 import {pool} from '../libs/database.js';
 import { hashedPassword, createJWT, comparePassword } from '../libs/index.js';
+
+
+const transporter = nodemailer.createTransport({
+  host: 'smtp.gmail.com',
+  port: 587,
+  secure: false, // true for 465, false for other ports
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASSWORD
+  },
+  tls: {
+    rejectUnauthorized: false // Allow self-signed certificates (use cautiously)
+  }
+});
+// Generate secure random password
+const generateSecurePassword = (length = 12) => {
+  const lowercase = 'abcdefghijklmnopqrstuvwxyz';
+  const uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+  const numbers = '0123456789';
+  const symbols = '!@#$%^&*';
+  
+  const allChars = lowercase + uppercase + numbers + symbols;
+  
+  let password = '';
+  
+  // Ensure at least one of each type
+  password += lowercase[crypto.randomInt(0, lowercase.length)];
+  password += uppercase[crypto.randomInt(0, uppercase.length)];
+  password += numbers[crypto.randomInt(0, numbers.length)];
+  password += symbols[crypto.randomInt(0, symbols.length)];
+  
+  // Fill the rest randomly
+  for (let i = password.length; i < length; i++) {
+    password += allChars[crypto.randomInt(0, allChars.length)];
+  }
+  
+  // Shuffle the password
+  return password.split('').sort(() => Math.random() - 0.5).join('');
+};
+const sendWelcomeEmail = async (email, firstName, username, password, roleId) => {
+  const roleNames = {
+    1: 'System Administrator',
+    2: 'Hospital Administrator',
+    3: 'Medical Practitioner',
+    4: 'Medical Staff (Nurse)',
+    5: 'Receptionist'
+  };
+
+  const mailOptions = {
+    from: `"${process.env.SYSTEM_NAME || 'Hospital System'}" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: 'Welcome to the Hospital Management System',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #2563eb; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+          .credentials { background: white; padding: 20px; margin: 20px 0; border-left: 4px solid #2563eb; border-radius: 4px; }
+          .credential-item { margin: 10px 0; }
+          .credential-label { font-weight: bold; color: #4b5563; }
+          .credential-value { font-family: 'Courier New', monospace; background: #f3f4f6; padding: 8px 12px; display: inline-block; border-radius: 4px; margin-left: 10px; }
+          .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }
+          .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+          .button { display: inline-block; background: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>Welcome to Our Hospital System</h1>
+          </div>
+          <div class="content">
+            <h2>Hello ${firstName},</h2>
+            <p>Your account has been successfully created. You have been registered as a <strong>${roleNames[roleId]}</strong>.</p>
+            
+            <div class="credentials">
+              <h3>Your Login Credentials</h3>
+              <div class="credential-item">
+                <span class="credential-label">Username:</span>
+                <span class="credential-value">${username}</span>
+              </div>
+              <div class="credential-item">
+                <span class="credential-label">Temporary Password:</span>
+                <span class="credential-value">${password}</span>
+              </div>
+            </div>
+
+            <div class="warning">
+              <strong>⚠️ Important Security Notice:</strong>
+              <ul>
+                <li>This is a temporary password. You will be required to change it on your first login.</li>
+                <li>Please keep these credentials secure and do not share them with anyone.</li>
+                <li>Delete this email after you've successfully logged in and changed your password.</li>
+              </ul>
+            </div>
+
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/login" class="button">Login to Your Account</a>
+
+            <p>If you have any questions or need assistance, please contact your system administrator.</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; ${new Date().getFullYear()} Hospital Management System. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error('Email sending failed:', error);
+    return { success: false, error: error.message };
+  }
+};
+
+const sendPasswordResetEmail = async (email, firstName, username, newPassword) => {
+  const mailOptions = {
+    from: `"${process.env.SYSTEM_NAME || 'Hospital System'}" <${process.env.EMAIL_USER}>`,
+    to: email,
+    subject: 'Password Reset - Hospital Management System',
+    html: `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .header { background: #dc3545; color: white; padding: 20px; text-align: center; border-radius: 8px 8px 0 0; }
+          .content { background: #f9fafb; padding: 30px; border: 1px solid #e5e7eb; }
+          .credentials { background: white; padding: 20px; margin: 20px 0; border-left: 4px solid #dc3545; border-radius: 4px; }
+          .credential-item { margin: 10px 0; }
+          .credential-label { font-weight: bold; color: #4b5563; }
+          .credential-value { font-family: 'Courier New', monospace; background: #f3f4f6; padding: 8px 12px; display: inline-block; border-radius: 4px; margin-left: 10px; }
+          .warning { background: #fef3c7; border-left: 4px solid #f59e0b; padding: 15px; margin: 20px 0; border-radius: 4px; }
+          .alert { background: #fee; border-left: 4px solid #dc3545; padding: 15px; margin: 20px 0; border-radius: 4px; }
+          .footer { text-align: center; color: #6b7280; font-size: 12px; margin-top: 30px; padding-top: 20px; border-top: 1px solid #e5e7eb; }
+          .button { display: inline-block; background: #dc3545; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <div class="header">
+            <h1>🔐 Password Reset</h1>
+          </div>
+          <div class="content">
+            <h2>Hello ${firstName},</h2>
+            <p>Your password has been reset by a system administrator. Below are your new login credentials.</p>
+            
+            <div class="alert">
+              <strong>⚠️ Security Notice:</strong>
+              <p style="margin: 0.5rem 0 0 0;">Your password was reset by an administrator. If you did not request this change, please contact your system administrator immediately.</p>
+            </div>
+
+            <div class="credentials">
+              <h3>Your New Login Credentials</h3>
+              <div class="credential-item">
+                <span class="credential-label">Username:</span>
+                <span class="credential-value">${username}</span>
+              </div>
+              <div class="credential-item">
+                <span class="credential-label">Temporary Password:</span>
+                <span class="credential-value">${newPassword}</span>
+              </div>
+            </div>
+
+            <div class="warning">
+              <strong>🔒 Important Security Instructions:</strong>
+              <ul>
+                <li>This is a temporary password. You <strong>must</strong> change it immediately upon your first login.</li>
+                <li>Keep these credentials secure and do not share them with anyone.</li>
+                <li>Delete this email after you've successfully logged in and changed your password.</li>
+                <li>If you did not request this reset, contact your administrator immediately.</li>
+              </ul>
+            </div>
+
+            <a href="${process.env.APP_URL || 'http://localhost:3000'}/login" class="button">Login to Your Account</a>
+
+            <p style="margin-top: 1.5rem;">If you have any questions or concerns, please contact your system administrator.</p>
+          </div>
+          <div class="footer">
+            <p>This is an automated message. Please do not reply to this email.</p>
+            <p>&copy; ${new Date().getFullYear()} Hospital Management System. All rights reserved.</p>
+          </div>
+        </div>
+      </body>
+      </html>
+    `
+  };
+
+  try {
+    await transporter.sendMail(mailOptions);
+    return { success: true };
+  } catch (error) {
+    console.error('Password reset email failed:', error);
+    return { success: false, error: error.message };
+  }
+};
 
 const safe = (val) => (val !== undefined ? val : null);
 
@@ -372,12 +576,12 @@ export const registerUser = async (req, res) => {
       first_name, middle_name, last_name, date_of_birth, gender,
       contact_info, address_line, hospital_id, branch_id, email,
       username, role_id, employee_id, license_number,
-      license_expiry, department, specialization, start_date,
-      password, country
+      license_expiry, department, specialization, start_date, country
     } = req.body;
 
+    // REMOVED password from required fields
     if (!first_name || !last_name || !date_of_birth || !contact_info ||
-        !email || !username || !password || !role_id) {
+        !email || !username || !role_id) {
       return res.status(400).json({
         status: "failed",
         message: "Please fill all required fields"
@@ -390,10 +594,11 @@ export const registerUser = async (req, res) => {
         message: "Provider requires license_number"
       });
     }
-     if ((role_id === 3 || role_id === 4) && !country) {
+    
+    if ((role_id === 3 || role_id === 4) && !country) {
       return res.status(400).json({
         status: "failed",
-        message: "Provider user's country"
+        message: "Provider user's country is required"
       });
     }
 
@@ -443,7 +648,10 @@ export const registerUser = async (req, res) => {
       }
     }
 
-    const hashed_password = await hashedPassword(password);
+    // GENERATE SECURE RANDOM PASSWORD
+    const generatedPassword = generateSecurePassword(12);
+    const hashed_password = await hashedPassword(generatedPassword);
+    
     const provider_hospital_id = hospital_id;
     const provider_branch_id = branch_id;
 
@@ -456,9 +664,10 @@ export const registerUser = async (req, res) => {
       `INSERT INTO users (
           first_name, middle_name, last_name, date_of_birth, gender,
           contact_info, address_line, email, username, password_hash,
-          hospital_id, branch_id, role_id, employee_id, department
+          hospital_id, branch_id, role_id, employee_id, department,
+          must_change_password
       )
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)
       RETURNING *`,
       [
         first_name,
@@ -475,7 +684,8 @@ export const registerUser = async (req, res) => {
         branch_id || null,
         role_id,
         employee_id,
-        department
+        department,
+        true // must_change_password = true
       ]
     );
 
@@ -506,10 +716,10 @@ export const registerUser = async (req, res) => {
     if (role_id === 3 || role_id === 4) {
       const newProvider = await client.query(
         `INSERT INTO healthcare_providers (
-            user_id, license_number, license_expiry, specialization,country
-        ) VALUES ($1, $2, $3, $4,$5)
+            user_id, license_number, license_expiry, specialization, country
+        ) VALUES ($1, $2, $3, $4, $5)
         RETURNING *`,
-        [user.user_id, license_number, license_expiry, specialization,country]
+        [user.user_id, license_number, license_expiry, specialization, country]
       );
 
       provider = newProvider.rows[0];
@@ -552,16 +762,29 @@ export const registerUser = async (req, res) => {
       });
     }
 
+    // SEND WELCOME EMAIL WITH CREDENTIALS
+    const emailResult = await sendWelcomeEmail(
+      email,
+      first_name,
+      username,
+      generatedPassword,
+      role_id
+    );
+
     await client.query("COMMIT");
 
     user.password_hash = undefined;
 
     res.status(201).json({
       status: "success",
-      message: "Registration successful",
+      message: emailResult.success 
+        ? "Registration successful! Login credentials have been sent to the user's email."
+        : "Registration successful, but email delivery failed. Please provide credentials manually.",
       user,
       provider,
-      provider_hospital
+      provider_hospital,
+      email_sent: emailResult.success,
+      email_error: emailResult.error || null
     });
 
   } catch (error) {
@@ -948,73 +1171,140 @@ export const passwordChange = async (req, res) => {
 export const adminResetPassword = async (req, res) => {
   const client = await pool.connect();
   try {
-    const { user_id, temp_password } = req.body;
+    const { user_id } = req.params;
+    const { confirmation_text, reason } = req.body;
 
-    const userExists = await client.query("SELECT * FROM users WHERE user_id=$1", [user_id]);
-    if (!userExists.rows[0]) {
+    // Validate confirmation text
+    if (confirmation_text !== 'RESET') {
+      return res.status(400).json({
+        status: "failed",
+        message: "Invalid confirmation text. You must type 'RESET' to confirm."
+      });
+    }
+
+    // Validate reason
+    if (!reason || !reason.trim()) {
+      return res.status(400).json({
+        status: "failed",
+        message: "Please provide a reason for the password reset"
+      });
+    }
+
+    // Check if user exists
+    const userExists = await client.query(
+      "SELECT * FROM users WHERE user_id=$1", 
+      [user_id]
+    );
+    
+    if (userExists.rows.length === 0) {
       return res.status(404).json({
         status: "failed",
         message: "User not found",
       });
     }
 
+    const targetUser = userExists.rows[0];
     const adminRole = req.user.role_id;
-    const adminHospitalid = req.user.hospital_id;
+    const adminHospitalId = req.user.hospital_id;
 
-    if (adminRole === 2 && userExists.rows[0].role_id === 3) {
-      const provider = await client.query(
-        "SELECT provider_id FROM healthcare_providers WHERE user_id=$1",
-        [userExists.rows[0].user_id]
-      );
-      if (!provider.rows[0]) {
-        return res.status(404).json({ status: "failed", message: "Provider not found" });
+    // Authorization checks
+    if (adminRole === 2) {
+      // Hospital admin trying to reset provider password
+      if (targetUser.role_id === 3) {
+        const provider = await client.query(
+          "SELECT provider_id FROM healthcare_providers WHERE user_id=$1",
+          [targetUser.user_id]
+        );
+        
+        if (provider.rows.length === 0) {
+          return res.status(404).json({ 
+            status: "failed", 
+            message: "Provider not found" 
+          });
+        }
+
+        const providerHospitals = await client.query(
+          "SELECT hospital_id FROM provider_hospitals WHERE provider_id=$1",
+          [provider.rows[0].provider_id]
+        );
+
+        const hospitalIds = providerHospitals.rows.map((r) => r.hospital_id);
+
+        if (!hospitalIds.includes(adminHospitalId)) {
+          return res.status(403).json({ 
+            status: "failed", 
+            message: "Access denied: Provider not associated with your hospital" 
+          });
+        }
+      } 
+      // Hospital admin trying to reset other user's password
+      else if (adminHospitalId !== targetUser.hospital_id) {
+        return res.status(403).json({ 
+          status: "failed", 
+          message: "Access denied: User not in your hospital" 
+        });
       }
-
-      const providerHospitals = await client.query(
-        "SELECT hospital_id FROM provider_hospitals WHERE provider_id=$1",
-        [provider.rows[0].provider_id]
-      );
-
-      const hospitalIds = providerHospitals.rows.map((r) => r.hospital_id);
-
-      if (!hospitalIds.includes(adminHospitalid)) {
-        return res.status(403).json({ status: "failed", message: "Access denied" });
-      }
-    } else if (adminRole === 2 && adminHospitalid !== userExists.rows[0].hospital_id) {
-      return res.status(403).json({ status: "failed", message: "Access denied" });
     }
 
-    const hashed_password = await hashedPassword(temp_password);
+    // Generate secure random password
+    const newPassword = generateSecurePassword(12);
+    const hashed_password = await hashedPassword(newPassword);
 
     await client.query("BEGIN");
 
+    // Update user password and force password change
     await client.query(
-      "UPDATE users SET password_hash=$1, must_change_password=true WHERE user_id=$2",
+      "UPDATE users SET password_hash=$1, must_change_password=true, updated_at=NOW() WHERE user_id=$2",
       [hashed_password, user_id]
     );
 
-    await client.query(
-      `INSERT INTO audit_logs (user_id, action, entity, entity_id, description, timestamp)
-       VALUES ($1, $2, $3, $4, $5, NOW())`,
-      [
-        req.user.user_id,
-        "ADMIN_PASSWORD_RESET",
-        "users",
-        user_id,
-        `Admin (ID: ${req.user.user_id}) reset password for user (ID: ${user_id}). Temporary password issued.`,
-      ]
+    // Log the action
+    await logAudit({
+      user_id: req.user.user_id,
+      table_name: "users",
+      action_type: "admin_password_reset",
+      record_id: user_id,
+      old_values: null,
+      new_values: {
+        must_change_password: true,
+        reason: reason
+      },
+      event_type: "UPDATE",
+      ip_address: req.ip,
+      branch_id: req.user.branch_id,
+      hospital_id: req.user.hospital_id,
+      request_method: req.method,
+      endpoint: req.originalUrl
+    });
+
+    // Send password reset email
+    const emailResult = await sendPasswordResetEmail(
+      targetUser.email,
+      targetUser.first_name,
+      targetUser.username,
+      newPassword
     );
 
     await client.query("COMMIT");
 
     res.status(200).json({
       status: "success",
-      message: "Temporary password set. User must change on next login.",
+      message: emailResult.success 
+        ? "Password reset successful. New credentials have been sent to the user's email."
+        : "Password reset successful, but email delivery failed. Please provide credentials manually.",
+      email_sent: emailResult.success,
+      email_error: emailResult.error || null,
+      // Only include password if email failed (for manual delivery)
+      temporary_password: emailResult.success ? undefined : newPassword
     });
+
   } catch (error) {
     await client.query("ROLLBACK");
-    console.error(error);
-    res.status(500).json({ message: "Server error" });
+    console.error("adminResetPassword error:", error);
+    res.status(500).json({ 
+      status: "failed",
+      message: "Server error while resetting password" 
+    });
   } finally {
     client.release();
   }
@@ -1410,10 +1700,7 @@ export const deleteUser = async (req, res) => {
       if (providerResult.rows.length > 0) {
         const provider_id = providerResult.rows[0].provider_id;
 
-       
-        await client.query("DELETE FROM provider_hospitals WHERE provider_id = $1", [provider_id]);
-
-      
+        
         await logAudit({
           user_id: req.user.user_id,
           table_name: "provider_hospitals",
@@ -1427,8 +1714,6 @@ export const deleteUser = async (req, res) => {
           endpoint: req.originalUrl
         });
 
-        await client.query("DELETE FROM healthcare_providers WHERE provider_id = $1", [provider_id]);
-
         await logAudit({
           user_id: req.user.user_id,
           table_name: "healthcare_providers",
@@ -1441,6 +1726,14 @@ export const deleteUser = async (req, res) => {
           request_method: req.method,
           endpoint: req.originalUrl
         });
+
+       
+        await client.query("DELETE FROM provider_hospitals WHERE provider_id = $1", [provider_id]);
+
+      
+        await client.query("DELETE FROM healthcare_providers WHERE provider_id = $1", [provider_id]);
+
+        
       }
     }
 
@@ -2289,9 +2582,6 @@ export const deleteUserPermanently = async (req, res) => {
       }
     }
 
-    // Delete the user
-    await client.query("DELETE FROM users WHERE user_id = $1", [user_id]);
-
     // Log the deletion
     await logAudit({
       user_id: req.user.user_id,
@@ -2311,6 +2601,16 @@ export const deleteUserPermanently = async (req, res) => {
       endpoint: req.originalUrl
     });
 
+    await client.query(
+  "UPDATE audit_logs SET user_id = NULL WHERE user_id = $1", 
+  [user_id]
+);
+
+
+    // Delete the user
+    await client.query("DELETE FROM users WHERE user_id = $1", [user_id]);
+
+    
     await client.query("COMMIT");
 
     res.status(200).json({

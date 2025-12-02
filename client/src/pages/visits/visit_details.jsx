@@ -818,7 +818,7 @@ const DeleteLabTestModal = ({ show, onClose, test, onDeleteSuccess }) => {
           </div>
         )}
 
-        {/* CLINICAL TABS - RESTRICTED FOR RECEPTIONISTS */}
+        
         {!isReceptionist && (
           <>
             {/* Vitals Tab */}
@@ -969,7 +969,7 @@ const DeleteLabTestModal = ({ show, onClose, test, onDeleteSuccess }) => {
               </div>
             )}
 
-            {/* CONTINUES IN PART 3 */}
+           
          {/* Treatments Tab */}
             {activeTab === "treatments" && (
               <div className="info-card">

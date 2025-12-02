@@ -34,7 +34,7 @@ router.get('/user-profile', authMiddleware, getUserProfile);
 router.delete('/delete-user/:user_id',authMiddleware, requireRole(1,2), deleteUser);
 router.post('/register-user', authMiddleware, requireRole(1,2),  registerUser);
 router.put("/change-password", authMiddleware, passwordChange);
-router.put('/admin-reset-password',authMiddleware, requireRole(1, 2), adminResetPassword);
+router.post('/admin-reset-password/:user_id',authMiddleware, requireRole(1, 2), adminResetPassword);
 router.put('/admin-update-user',authMiddleware, requireRole(1, 2), adminUpdateUser);
 router.put('/self-update',authMiddleware, userUpdateUser);
 router.post('/self-register', selfRegister);

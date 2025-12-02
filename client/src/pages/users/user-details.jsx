@@ -15,8 +15,15 @@ const UserDetails = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [formData, setFormData] = useState({ reason: '', confirmText: '' });
 
+const [resetPasswordModal, setResetPasswordModal] = useState(false);
+const [resetPasswordData, setResetPasswordData] = useState({ reason: '', confirmText: '' });
+
+
   // Check if current user is admin (role_id 1)
-  const isAdmin = currentUser?.role_id === 1;
+  const isSystemAdmin = currentUser?.role_id === 1;
+
+  const canResetPassword = currentUser?.role_id === 1 || currentUser?.role_id === 2;
+
 
   useEffect(() => {
     fetchUserDetails();
@@ -85,6 +92,52 @@ const UserDetails = () => {
         return 'status-badge pending';
     }
   };
+
+  const handlePasswordReset = async () => {
+  if (resetPasswordData.confirmText !== 'RESET') {
+    toast.error('You must type "RESET" to confirm');
+    return;
+  }
+
+  if (!resetPasswordData.reason.trim()) {
+    toast.error('Please provide a reason for password reset');
+    return;
+  }
+
+  setActionLoading(true);
+  try {
+    const response = await api.post(`/users/admin-reset-password/${user_id}`, {
+      confirmation_text: 'RESET',
+      reason: resetPasswordData.reason
+    });
+
+    if (response.data.status === 'success') {
+      const message = response.data.email_sent 
+        ? 'Password reset successful! New credentials sent to user\'s email.'
+        : 'Password reset successful, but email failed. Please provide credentials manually.';
+      
+      toast.success(message);
+      
+      // If email failed, show the temporary password
+      if (!response.data.email_sent && response.data.temporary_password) {
+        toast.error(`Temporary Password: ${response.data.temporary_password}`, {
+          duration: 10000
+        });
+      }
+
+      setResetPasswordModal(false);
+      setResetPasswordData({ reason: '', confirmText: '' });
+      fetchUserDetails();
+    } else {
+      toast.error(response.data.message || 'Failed to reset password');
+    }
+  } catch (error) {
+    console.error('Password reset error:', error);
+    toast.error(error.response?.data?.message || 'Error resetting password');
+  } finally {
+    setActionLoading(false);
+  }
+};
 
   // Action Handlers
   const handleDeactivate = async () => {
@@ -255,6 +308,16 @@ const UserDetails = () => {
 
       {/* Action Buttons - Show conditionally based on account status and role */}
       <div className="action-buttons-group">
+        {canResetPassword && user.account_status === 'active' && (
+          <button 
+            onClick={() => setResetPasswordModal(true)} 
+            className="btn-action btn-info"
+            style={{ background: '#17a2b8', borderColor: '#17a2b8' }}
+          >
+            🔑 Reset Password
+          </button>
+        )}
+
         {user.account_status === 'active' && (
           <button 
             onClick={() => openModal('deactivate')} 
@@ -272,7 +335,7 @@ const UserDetails = () => {
           </button>
         )}
         {/* Only show delete button to admins (role_id 1) */}
-        {isAdmin && (
+        {isSystemAdmin && (
           <button 
             onClick={() => openModal('delete')} 
             className="btn-action btn-danger"
@@ -635,6 +698,8 @@ const UserDetails = () => {
               </>
             )}
 
+            
+
             {/* Reactivate Modal */}
             {modal.type === 'reactivate' && (
               <>
@@ -670,6 +735,7 @@ const UserDetails = () => {
                 </div>
               </>
             )}
+            
 
             {/* Delete Modal */}
             {modal.type === 'delete' && (
@@ -732,6 +798,79 @@ const UserDetails = () => {
                 </div>
               </>
             )}
+          </div>
+        </div>
+      )}
+      {/* Password Reset Modal - SEPARATE */}
+      {resetPasswordModal && (
+        <div className="modal-overlay" onClick={() => setResetPasswordModal(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <h2>🔑 Reset User Password</h2>
+              <button className="modal-close" onClick={() => setResetPasswordModal(false)}>✕</button>
+            </div>
+            <div className="modal-body">
+              <div style={{ 
+                padding: '1rem', 
+                backgroundColor: '#fff3cd', 
+                border: '1px solid #ffc107', 
+                borderRadius: '4px',
+                marginBottom: '1rem'
+              }}>
+                <strong style={{ color: '#856404' }}>⚠️ Important:</strong>
+                <ul style={{ margin: '0.5rem 0 0 0', paddingLeft: '1.5rem', fontSize: '0.9rem' }}>
+                  <li>A new temporary password will be generated</li>
+                  <li>The user will be required to change it on next login</li>
+                  <li>New credentials will be sent to: <strong>{user.email}</strong></li>
+                </ul>
+              </div>
+
+              <p>You are about to reset the password for <strong>{user.first_name} {user.last_name}</strong>.</p>
+
+              <div className="form-group">
+                <label>Reason for password reset *</label>
+                <textarea
+                  value={resetPasswordData.reason}
+                  onChange={(e) => setResetPasswordData({ ...resetPasswordData, reason: e.target.value })}
+                  placeholder="e.g., User forgot password, Security breach, etc."
+                  rows="3"
+                  className="form-textarea"
+                />
+              </div>
+
+              <div className="form-group">
+                <label>Type <strong>"RESET"</strong> to confirm *</label>
+                <input
+                  type="text"
+                  value={resetPasswordData.confirmText}
+                  onChange={(e) => setResetPasswordData({ ...resetPasswordData, confirmText: e.target.value })}
+                  placeholder="Type RESET"
+                  className="form-input"
+                  style={{ fontWeight: 'bold' }}
+                />
+                {resetPasswordData.confirmText !== 'RESET' && resetPasswordData.confirmText && (
+                  <p style={{ color: '#dc3545', fontSize: '0.85rem', margin: '0.5rem 0 0 0' }}>
+                    Text must match exactly
+                  </p>
+                )}
+              </div>
+            </div>
+            <div className="modal-footer">
+              <button 
+                onClick={() => setResetPasswordModal(false)} 
+                className="btn-secondary"
+              >
+                Cancel
+              </button>
+              <button 
+                onClick={handlePasswordReset} 
+                disabled={actionLoading || resetPasswordData.confirmText !== 'RESET' || !resetPasswordData.reason.trim()}
+                className="btn-primary"
+                style={{ background: '#17a2b8', borderColor: '#17a2b8' }}
+              >
+                {actionLoading ? 'Resetting...' : 'Reset Password'}
+              </button>
+            </div>
           </div>
         </div>
       )}

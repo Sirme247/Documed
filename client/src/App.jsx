@@ -52,7 +52,6 @@ import FrequentPatients from './pages/patients/admitted-patients.jsx'
 import OpenVisits from './pages/visits/open-visits.jsx'
 import UserActionsModal from './pages/users/user-actions-modal.jsx'
 
-
 import Sidebar from './components/sidebar.jsx' 
 import Breadcrumb from './components/breadcrumb.jsx'
 import Summary from './pages/patients/summary.jsx'
@@ -74,12 +73,12 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
   console.log('allowedRoles:', allowedRoles);
   
   if (!isAuthenticated) {
-    console.log(' Not authenticated');
+    console.log('❌ Not authenticated');
     return <Navigate to="/sign-in" replace />
   }
   
   if (user?.must_change_password && location.pathname !== '/password-change' && location.pathname !== '/sign-out') {
-    console.log(' User must change password, redirecting...');
+    console.log('⚠️ User must change password, redirecting...');
     return <Navigate to="/password-change" replace />
   }
   
@@ -92,7 +91,7 @@ const ProtectedRoute = ({ allowedRoles, children }) => {
       return match;
     });
     
-    console.log('Final result:', hasAccess ? ' GRANTED' : ' DENIED');
+    console.log('Final result:', hasAccess ? '✅ GRANTED' : '❌ DENIED');
     
     if (!hasAccess) {
       return <Navigate to="/unauthorized" replace />
@@ -187,11 +186,9 @@ function App() {
     setIsInitialized(true);
   }, [setCredentials]);
 
-  // Check if user is authenticated
   const isAuthenticated = !!user?.token;
 
-  // Public routes that should NOT show sidebar
-  const publicPaths = ['/sign-in', '/sign-out', '/password-reset', '/select-hospital', '/unauthorized'];
+  const publicPaths = ['/sign-in', '/sign-out', '/password-change', '/select-hospital', '/unauthorized'];
   const location = useLocation?.() || { pathname: window.location.pathname };
   const isPublicRoute = publicPaths.includes(location.pathname);
 
@@ -254,27 +251,24 @@ function App() {
         }}
       />
       
-      {/* Main Layout with Sidebar */}
-     <div style={{ display: 'flex', width: '100%', minHeight: '100vh' }}>
-  {/* Sidebar */}
-  {isAuthenticated && !isPublicRoute && <Sidebar />}
-  
-  {/* Main content area */}
-  <div 
-    className="RoutesDiv" 
-    style={{ 
-      flex: 1,
-      marginLeft: isAuthenticated && !isPublicRoute ? 'var(--sidebar-width, 280px)' : '0',
-      minHeight: '100vh',
-      transition: 'margin-left 0.3s ease',
-      width: '100%',
-      maxWidth: '100%',
-      minWidth: 0, //Allows container to shrink
-      overflowX: 'hidden',
-      boxSizing: 'border-box'
-    }}
-  >
-     {isAuthenticated && !isPublicRoute && <Breadcrumb />}
+      <div style={{ display: 'flex', width: '100%', minHeight: '100vh' }}>
+        {isAuthenticated && !isPublicRoute && <Sidebar />}
+        
+        <div 
+          className="RoutesDiv" 
+          style={{ 
+            flex: 1,
+            marginLeft: isAuthenticated && !isPublicRoute ? 'var(--sidebar-width, 280px)' : '0',
+            minHeight: '100vh',
+            transition: 'margin-left 0.3s ease',
+            width: '100%',
+            maxWidth: '100%',
+            minWidth: 0,
+            overflowX: 'hidden',
+            boxSizing: 'border-box'
+          }}
+        >
+          {isAuthenticated && !isPublicRoute && <Breadcrumb />}
           <Routes>
             {/* Public routes */}
             <Route path="/sign-in" element={<SignIn />} />
@@ -283,72 +277,102 @@ function App() {
             <Route path="/password-reset" element={<UserPasswordReset />} />
             <Route path="/unauthorized" element={<Unauthorized />} />
             
-            {/* Password change route */}
+            {/* Password change - all authenticated users */}
             <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4, 5]} />}>
               <Route path="/password-change" element={<PasswordChange />} />
-              <Route path="/ai-summary/:patient_id" element={<Summary />} />
+              <Route path="/profile/user" element={<UserProfile />} />
             </Route>
             
             {/* Root redirect */}
             <Route path="/" element={<RootLayout />} />
             <Route path="/overview" element={<RootLayout />} />
 
-            {/* Shared routes for all users */}
-            <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4, 5]} />}>
+            {/* ========================================
+                PATIENT MANAGEMENT ROUTES
+                - Global Admin (1): Can view/edit patients, NO visits
+                - Hospital Admin (2): NO ACCESS
+                - Doctor (3), Nurse (4), Receptionist (5): Full access
+            ======================================== */}
+            
+            {/* Patient Registration & Basic Management - Excluding Hospital Admin */}
+            <Route element={<ProtectedRoute allowedRoles={[1, 3, 4, 5]} />}>
               <Route path="/patients/register" element={<RegisterPatient />} />
-
-              <Route path="/profile/user" element={<UserProfile />} />
-              <Route path="/patients/:patient_id/edit-medicals" element={<EditMedicals />} />
-              
               <Route path="/patients/list" element={<PatientList />} />
               <Route path="/patients/:patient_id" element={<PatientDetails />} />
               <Route path="/patients/:patient_id/edit" element={<EditPatient />} />
-              
+            </Route>
+
+            {/* Medical History Management - Only clinical staff (Doctor, Nurse, Receptionist) */}
+            <Route element={<ProtectedRoute allowedRoles={[3, 4, 5]} />}>
+              <Route path="/patients/:patient_id/edit-medicals" element={<EditMedicals />} />
               <Route path="/patients/add-allergy" element={<AddAllergy />} />
               <Route path="/patients/add-chronic-condition" element={<AddChronicCondition />} />
               <Route path="/patients/add-family-history" element={<AddFamilyHistory />} />
               <Route path="/patients/add-medication" element={<AddMedication />} />
               <Route path="/patients/add-social-history" element={<AddSocialHistory />} />
-              
+              <Route path="/ai-summary/:patient_id" element={<Summary />} />
+            </Route>
+
+            {/* ========================================
+                VISIT MANAGEMENT ROUTES
+                - Global Admin (1): NO ACCESS
+                - Hospital Admin (2): NO ACCESS  
+                - Doctor (3), Nurse (4), Receptionist (5): Full access
+            ======================================== */}
+            
+            {/* All Visit Routes - Clinical staff only */}
+            <Route element={<ProtectedRoute allowedRoles={[3, 4, 5]} />}>
+              {/* Visit Creation & Viewing */}
               <Route path="/visits/new" element={<NewVisit />} />
               <Route path="/visits/patients/:patient_id" element={<PatientVisitList />} />
               <Route path="/visits/details/:visit_id" element={<VisitDetails />} />
+              <Route path="/visits/open" element={<OpenVisits />} />
               
+              {/* Visit Recording (Vitals, Diagnosis, etc.) */}
+              <Route path="/visits/record-vitals" element={<RecordVitals />} />
               <Route path="/visits/record-diagnosis" element={<RecordDiagnosis />} />
               <Route path="/visits/record-imaging-results" element={<RecordImagingResult />} />
               <Route path="/visits/record-lab-results" element={<RecordLabTests />} />
-              <Route path="/visits/record-vitals" element={<RecordVitals />} />
               <Route path="/visits/record-prescriptions" element={<RecordPrescription />} />
               <Route path="/visits/record-treatment" element={<RecordTreatment />} />
-              <Route path="/visits/open" element={<OpenVisits />} />
               
-              
-              <Route path="/branches/:branch_id" element={<BranchDetails />} />
-            </Route>
-
-            <Route element={<ProtectedRoute allowedRoles={[2, 3, 4, 5]} />}>
+              {/* Hospital-wide Visit Views */}
               <Route path="/visits/hospital/today" element={<VisitsDayHospital />} />
               <Route path="/visits/hospital/all" element={<VisitsAllHospital />} />
               <Route path="/visits/hospital/last-week" element={<LastWeekVisits />} />
+              
+              {/* Patient Analytics */}
               <Route path="/patients/frequent" element={<FrequentPatients />} />
             </Route>
 
-            {/* Shared routes for Global Admin and Local Admin */}
+            {/* ========================================
+                USER MANAGEMENT ROUTES
+                - Global Admin (1) & Hospital Admin (2): Can manage users
+            ======================================== */}
+            
             <Route element={<ProtectedRoute allowedRoles={[1, 2]} />}>
               <Route path="/users/register" element={<UserRegistration />} />
               <Route path="/users/register-existing-doctor" element={<RegisterExistingDoctor />} />
               <Route path="/users/list" element={<UserList />} />
               <Route path="/users/:user_id" element={<UserDetails />} />
               <Route path="/users/:user_id/edit" element={<EditUser />} />
-
               <Route path='/user-actions-modal' element={<UserActionsModal />} />
             </Route>
 
-            {/* System Admin ONLY routes */}
+            {/* ========================================
+                HOSPITAL MANAGEMENT ROUTES
+            ======================================== */}
+            
+            {/* Branch Details - All authenticated users */}
+            <Route element={<ProtectedRoute allowedRoles={[1, 2, 3, 4, 5]} />}>
+              <Route path="/branches/:branch_id" element={<BranchDetails />} />
+            </Route>
+
+            {/* Global Admin ONLY routes */}
             <Route element={<ProtectedRoute allowedRoles={[1]} />}>
-              <Route path="/hospitals/register-branch" element={<HospitalBranchRegistration />} />
               <Route path="/dashboard/global-admin" element={<GlobalAdminDashboard />} />
               <Route path="/hospitals/register" element={<HospitalRegistration />} />
+              <Route path="/hospitals/register-branch" element={<HospitalBranchRegistration />} />
               <Route path="/hospitals/list" element={<HospitalList />} />
               <Route path="/hospitals/:hospital_id" element={<HospitalDetails />} />
               <Route path="/hospitals/:hospital_id/edit" element={<EditHospitals />} />
@@ -363,17 +387,15 @@ function App() {
               <Route path="/users/hospital-users" element={<HospitalUsers />} />
             </Route>
 
-            {/* Doctor ONLY routes */}
+            {/* Role-Specific Dashboards */}
             <Route element={<ProtectedRoute allowedRoles={[3]} />}>
               <Route path="/dashboard/doctor" element={<DoctorDashboard />} />
             </Route>
 
-            {/* Nurse ONLY routes */}
             <Route element={<ProtectedRoute allowedRoles={[4]} />}>
               <Route path="/dashboard/nurse" element={<NurseDashboard />} />
             </Route>
 
-            {/* Receptionist ONLY routes */}
             <Route element={<ProtectedRoute allowedRoles={[5]} />}>
               <Route path="/dashboard/receptionist" element={<ReceptionistDashboard />} />
             </Route>

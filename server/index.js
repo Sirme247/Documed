@@ -1,6 +1,7 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
+import { corsOptions } from './libs/cors.js';
 
 import routes from './routes/index.js';
 import { scheduleAuditCleanup } from './controllers/auditController.js';
@@ -14,11 +15,7 @@ const PORT = process.env.PORT || 9000;
 const app = express();
 
 // CORS must be before other middleware
-const corsOptions = {
-    origin: 'http://localhost:5173',
-    credentials: true,
-    optionsSuccessStatus: 200
-};
+
 app.use(cors(corsOptions));
 
 // Body parsers with proper limits

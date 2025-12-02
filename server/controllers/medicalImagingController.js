@@ -18,25 +18,107 @@ export const uploadDicomMiddleware = multer({
     const isDicomMime = file.mimetype === 'application/dicom' || 
                         file.mimetype === 'application/octet-stream';
     
-    // Allow files without extensions 
     if (allowedTypes.includes(ext) || isDicomMime || !ext) {
       cb(null, true);
     } else {
       cb(new Error('Only DICOM files (.dcm, .dicom, or no extension) are allowed'));
     }
   }
-}).any(); 
-// Upload DICOM study 
+}).any();
+
+// Helper function to clean up Orthanc uploads
+async function cleanupOrthancUploads(instanceIds) {
+  if (!instanceIds || instanceIds.length === 0) return;
+  
+  console.log(`🧹 Cleaning up ${instanceIds.length} instances from Orthanc...`);
+  
+  const CLEANUP_BATCH_SIZE = 5;
+  let successCount = 0;
+  let failCount = 0;
+  
+  for (let i = 0; i < instanceIds.length; i += CLEANUP_BATCH_SIZE) {
+    const batch = instanceIds.slice(i, i + CLEANUP_BATCH_SIZE);
+    const deletePromises = batch.map(async (instanceId) => {
+      try {
+        await orthancService.deleteInstance(instanceId);
+        successCount++;
+        return { success: true, instanceId };
+      } catch (error) {
+        failCount++;
+        console.error(`Failed to delete instance ${instanceId}:`, error.message);
+        return { success: false, instanceId, error: error.message };
+      }
+    });
+    
+    await Promise.all(deletePromises);
+  }
+  
+  console.log(`✅ Cleanup complete: ${successCount} deleted, ${failCount} failed`);
+}
+
+// Helper function to handle abort and cleanup
+async function handleAbort(uploadedToOrthanc, client, res) {
+  console.log('🛑 Upload aborted - performing cleanup...');
+  
+  // Clean up Orthanc uploads
+  if (uploadedToOrthanc && uploadedToOrthanc.length > 0) {
+    await cleanupOrthancUploads(uploadedToOrthanc);
+  }
+  
+  // Rollback database transaction
+  try {
+    await client.query("ROLLBACK");
+  } catch (err) {
+    console.error('Error rolling back:', err.message);
+  }
+  
+  // Release database client
+  try {
+    client.release();
+  } catch (err) {
+    console.error('Error releasing client:', err.message);
+  }
+  
+  // Send response if headers not sent
+  if (!res.headersSent) {
+    res.status(499).json({
+      status: "cancelled",
+      message: "Upload cancelled by client"
+    });
+  }
+}
+
+// Main upload function
 export const uploadDicomStudy = async (req, res) => {
   const client = await pool.connect();
+  let uploadedToOrthanc = [];
+  let requestAborted = false;
   
   try {
+    // Set up abort detection
+    req.on('close', () => {
+      if (!res.headersSent) {
+        console.log('⚠️ Client disconnected');
+        requestAborted = true;
+      }
+    });
+
+    req.on('aborted', () => {
+      console.log('⚠️ Request aborted');
+      requestAborted = true;
+    });
+
+    req.on('error', (err) => {
+      console.log('⚠️ Request error:', err.message);
+      requestAborted = true;
+    });
+
+    // Extract request data
     const { visit_id, findings, recommendations, body_part_override } = req.body;
-    
-    // Handle files from any field name
     const dicomFiles = req.files || [];
     const user_id = req.user.user_id;
 
+    // Validate input
     if (!visit_id) {
       return res.status(400).json({
         status: "failed",
@@ -64,34 +146,70 @@ export const uploadDicomStudy = async (req, res) => {
       });
     }
 
+    // Start database transaction
     await client.query("BEGIN");
 
-    // Upload all DICOM files to Orthanc first
+    console.log(`[1/6] Starting upload of ${dicomFiles.length} DICOM files...`);
+
+    // ==================== STEP 1: Upload files to Orthanc ====================
     const uploadResults = [];
     const uploadErrors = [];
+    const BATCH_SIZE = 10;
 
-    console.log(`Starting upload of ${dicomFiles.length} DICOM files...`);
-
-    for (const file of dicomFiles) {
-      try {
-        const orthancResponse = await orthancService.uploadDicom(file.buffer);
-        uploadResults.push({
-          file: file.originalname,
-          instanceId: orthancResponse.ID,
-          studyId: orthancResponse.ParentStudy,
-          seriesId: orthancResponse.ParentSeries,
-          size: file.size
-        });
-      } catch (uploadError) {
-        console.error(`Error uploading ${file.originalname}:`, uploadError);
-        uploadErrors.push({
-          file: file.originalname,
-          error: uploadError.message
-        });
+    for (let i = 0; i < dicomFiles.length; i += BATCH_SIZE) {
+      // Check for abort
+      if (requestAborted) {
+        await handleAbort(uploadedToOrthanc, client, res);
+        return;
       }
+
+      const batch = dicomFiles.slice(i, i + BATCH_SIZE);
+      const batchPromises = batch.map(file => 
+        orthancService.uploadDicom(file.buffer)
+          .then(response => {
+            if (requestAborted) {
+              throw new Error('Upload cancelled by user');
+            }
+            
+            uploadedToOrthanc.push(response.ID);
+            
+            return {
+              success: true,
+              file: file.originalname,
+              instanceId: response.ID,
+              studyId: response.ParentStudy,
+              seriesId: response.ParentSeries,
+              size: file.size
+            };
+          })
+          .catch(error => ({
+            success: false,
+            file: file.originalname,
+            error: error.message
+          }))
+      );
+
+      const batchResults = await Promise.all(batchPromises);
+      
+      batchResults.forEach(result => {
+        if (result.success) {
+          uploadResults.push(result);
+        } else {
+          uploadErrors.push(result);
+        }
+      });
+
+      console.log(`Uploaded batch ${Math.floor(i / BATCH_SIZE) + 1}/${Math.ceil(dicomFiles.length / BATCH_SIZE)}`);
+    }
+
+    // Check for abort after uploads
+    if (requestAborted) {
+      await handleAbort(uploadedToOrthanc, client, res);
+      return;
     }
 
     if (uploadResults.length === 0) {
+      await cleanupOrthancUploads(uploadedToOrthanc);
       await client.query("ROLLBACK");
       return res.status(500).json({
         status: "failed",
@@ -100,9 +218,9 @@ export const uploadDicomStudy = async (req, res) => {
       });
     }
 
-    console.log(`Successfully uploaded ${uploadResults.length} files to Orthanc`);
+    console.log(`[2/6] Successfully uploaded ${uploadResults.length}/${dicomFiles.length} files`);
 
-    // Group instances by study
+    // ==================== STEP 2: Group by study ====================
     const studiesByStudyId = {};
     uploadResults.forEach(result => {
       if (!studiesByStudyId[result.studyId]) {
@@ -111,38 +229,46 @@ export const uploadDicomStudy = async (req, res) => {
       studiesByStudyId[result.studyId].push(result);
     });
 
-    console.log(`Files grouped into ${Object.keys(studiesByStudyId).length} study/studies`);
+    console.log(`[3/6] Grouped into ${Object.keys(studiesByStudyId).length} study/studies`);
 
-    // Wait for Orthanc to process and index the studies
+    // Check for abort
+    if (requestAborted) {
+      await handleAbort(uploadedToOrthanc, client, res);
+      return;
+    }
+
+    // Wait for Orthanc to index
     await new Promise(resolve => setTimeout(resolve, 1000));
 
-    // Process each study
     const createdStudies = [];
 
+    // ==================== STEP 3: Process each study ====================
     for (const [orthancStudyId, instances] of Object.entries(studiesByStudyId)) {
+      if (requestAborted) {
+        await handleAbort(uploadedToOrthanc, client, res);
+        return;
+      }
+
       try {
-        console.log(`Processing study ${orthancStudyId} with ${instances.length} instances`);
+        console.log(`[4/6] Processing study ${orthancStudyId} with ${instances.length} instances`);
 
-        // Get study information from Orthanc 
-        const studyInfo = await orthancService.getStudy(orthancStudyId);
-        
-        // Get tags from first instance for metadata
-        const firstInstanceTags = await orthancService.getInstanceTags(instances[0].instanceId);
+        // Get study metadata
+        const [studyInfo, firstInstanceTags] = await Promise.all([
+          orthancService.getStudy(orthancStudyId),
+          orthancService.getInstanceTags(instances[0].instanceId)
+        ]);
+
+        if (requestAborted) {
+          await handleAbort(uploadedToOrthanc, client, res);
+          return;
+        }
+
         const studyMetadata = firstInstanceTags;
-
-        // Extract study-level information
         const studyInstanceUID = studyMetadata.StudyInstanceUID;
         const studyDate = studyMetadata.StudyDate 
           ? new Date(studyMetadata.StudyDate.replace(/(\d{4})(\d{2})(\d{2})/, '$1-$2-$3'))
           : new Date();
-
-        // Get all unique series IDs from instances
-        const uniqueSeriesIds = [...new Set(instances.map(i => i.seriesId))];
-        
-        // Determine primary modality from metadata
         const primaryModality = studyMetadata.Modality || 'Unknown';
-
-        console.log(`Study details - UID: ${studyInstanceUID}, Modality: ${primaryModality}, Series: ${uniqueSeriesIds.length}`);
 
         // Check if study already exists
         const existingStudy = await client.query(
@@ -150,14 +276,16 @@ export const uploadDicomStudy = async (req, res) => {
           [orthancStudyId]
         );
 
+        if (requestAborted) {
+          await handleAbort(uploadedToOrthanc, client, res);
+          return;
+        }
+
         let studyId;
 
         if (existingStudy.rows.length > 0) {
           // Update existing study
           studyId = existingStudy.rows[0].imaging_study_id;
-          
-          console.log(`Updating existing study ${studyId}`);
-          
           await client.query(
             `UPDATE imaging_studies 
              SET findings = COALESCE($1, findings),
@@ -167,9 +295,7 @@ export const uploadDicomStudy = async (req, res) => {
             [findings, recommendations, studyId]
           );
         } else {
-          // Create new study record
-          console.log(`Creating new study record`);
-          
+          // Create new study
           const studyResult = await client.query(
             `INSERT INTO imaging_studies
               (visit_id, orthanc_study_id, study_instance_uid, modality, 
@@ -192,11 +318,14 @@ export const uploadDicomStudy = async (req, res) => {
             ]
           );
           studyId = studyResult.rows[0].imaging_study_id;
-          
-          console.log(`Created study with ID ${studyId}`);
         }
 
-        // Process each series in the study
+        if (requestAborted) {
+          await handleAbort(uploadedToOrthanc, client, res);
+          return;
+        }
+
+        // ==================== STEP 4: Group instances by series ====================
         const seriesBySeriesId = {};
         instances.forEach(inst => {
           if (!seriesBySeriesId[inst.seriesId]) {
@@ -205,75 +334,172 @@ export const uploadDicomStudy = async (req, res) => {
           seriesBySeriesId[inst.seriesId].push(inst);
         });
 
-        console.log(`Processing ${Object.keys(seriesBySeriesId).length} series...`);
+        const uniqueSeriesIds = Object.keys(seriesBySeriesId);
+        console.log(`[5/6] Processing ${uniqueSeriesIds.length} series...`);
 
-        for (const [seriesId, seriesInstances] of Object.entries(seriesBySeriesId)) {
-          // Get series info from Orthanc
-          const seriesInfo = await orthancService.getSeries(seriesId);
-          const firstInstanceTags = await orthancService.getInstanceTags(seriesInstances[0].instanceId);
+        // Fetch series metadata in parallel
+        const seriesInfoPromises = uniqueSeriesIds.map(seriesId =>
+          Promise.all([
+            orthancService.getSeries(seriesId),
+            orthancService.getInstanceTags(seriesBySeriesId[seriesId][0].instanceId)
+          ]).then(([seriesInfo, tags]) => ({
+            seriesId,
+            seriesInfo,
+            tags,
+            instances: seriesBySeriesId[seriesId]
+          }))
+        );
 
-          // Check if series exists
-          const existingSeries = await client.query(
+        const allSeriesData = await Promise.all(seriesInfoPromises);
+
+        if (requestAborted) {
+          await handleAbort(uploadedToOrthanc, client, res);
+          return;
+        }
+
+        // ==================== STEP 5: Insert series ====================
+        const seriesToInsert = [];
+        const seriesToUpdate = [];
+
+        for (const seriesData of allSeriesData) {
+          const existing = await client.query(
             'SELECT imaging_series_id FROM imaging_series WHERE orthanc_series_id = $1',
-            [seriesId]
+            [seriesData.seriesId]
           );
 
-          let dbSeriesId;
-
-          if (existingSeries.rows.length > 0) {
-            dbSeriesId = existingSeries.rows[0].imaging_series_id;
-            console.log(`Series ${seriesId} already exists`);
+          if (existing.rows.length === 0) {
+            seriesToInsert.push(seriesData);
           } else {
-            // Create new series record
-            const seriesResult = await client.query(
-              `INSERT INTO imaging_series
-                (imaging_study_id, orthanc_series_id, series_instance_uid,
-                 series_number, series_description, modality, body_part, dicom_metadata)
-               VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-               RETURNING imaging_series_id`,
-              [
-                studyId,
-                seriesId,
-                firstInstanceTags.SeriesInstanceUID,
-                firstInstanceTags.SeriesNumber || null,
-                firstInstanceTags.SeriesDescription || null,
-                firstInstanceTags.Modality || null,
-                body_part_override || firstInstanceTags.BodyPartExamined || null,
-                JSON.stringify(firstInstanceTags)
-              ]
-            );
-            dbSeriesId = seriesResult.rows[0].imaging_series_id;
-            console.log(`Created series ${dbSeriesId}`);
+            seriesToUpdate.push({
+              ...seriesData,
+              dbSeriesId: existing.rows[0].imaging_series_id
+            });
           }
+        }
 
-          // Insert instances
-          for (const instance of seriesInstances) {
-            const instanceTags = await orthancService.getInstanceTags(instance.instanceId);
+        const seriesIdMap = {};
+        
+        if (seriesToInsert.length > 0) {
+          const seriesValues = seriesToInsert.map((sd, idx) => 
+            `($1, $${idx * 7 + 2}, $${idx * 7 + 3}, $${idx * 7 + 4}, $${idx * 7 + 5}, $${idx * 7 + 6}, $${idx * 7 + 7}, $${idx * 7 + 8})`
+          ).join(',');
 
-            // Check if instance exists
-            const existingInstance = await client.query(
-              'SELECT imaging_instance_id FROM imaging_instances WHERE orthanc_instance_id = $1',
-              [instance.instanceId]
+          const seriesParams = [studyId];
+          seriesToInsert.forEach(sd => {
+            seriesParams.push(
+              sd.seriesId,
+              sd.tags.SeriesInstanceUID,
+              sd.tags.SeriesNumber || null,
+              sd.tags.SeriesDescription || null,
+              sd.tags.Modality || null,
+              body_part_override || sd.tags.BodyPartExamined || null,
+              JSON.stringify(sd.tags)
             );
+          });
 
-            if (existingInstance.rows.length === 0) {
-              await client.query(
-                `INSERT INTO imaging_instances
-                  (imaging_series_id, orthanc_instance_id, sop_instance_uid,
-                   instance_number, file_name, file_size, dicom_metadata)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-                [
-                  dbSeriesId,
-                  instance.instanceId,
-                  instanceTags.SOPInstanceUID,
-                  instanceTags.InstanceNumber || null,
-                  instance.file,
-                  instance.size,
-                  JSON.stringify(instanceTags)
-                ]
-              );
+          const seriesResult = await client.query(
+            `INSERT INTO imaging_series
+              (imaging_study_id, orthanc_series_id, series_instance_uid,
+               series_number, series_description, modality, body_part, dicom_metadata)
+             VALUES ${seriesValues}
+             RETURNING imaging_series_id, orthanc_series_id`,
+            seriesParams
+          );
+
+          seriesResult.rows.forEach(row => {
+            seriesIdMap[row.orthanc_series_id] = row.imaging_series_id;
+          });
+        }
+
+        if (requestAborted) {
+          await handleAbort(uploadedToOrthanc, client, res);
+          return;
+        }
+
+        seriesToUpdate.forEach(sd => {
+          seriesIdMap[sd.seriesId] = sd.dbSeriesId;
+        });
+
+        // ==================== STEP 6: Insert instances ====================
+        console.log(`[6/6] Inserting ${instances.length} instances...`);
+
+        const instancesData = [];
+        
+        for (const seriesData of allSeriesData) {
+          const dbSeriesId = seriesIdMap[seriesData.seriesId];
+          
+          for (const instance of seriesData.instances) {
+            instancesData.push({
+              dbSeriesId,
+              instanceId: instance.instanceId,
+              fileName: instance.file,
+              fileSize: instance.size
+            });
+          }
+        }
+
+        // Check which instances already exist
+        const existingInstanceIds = await client.query(
+          `SELECT orthanc_instance_id FROM imaging_instances 
+           WHERE orthanc_instance_id = ANY($1)`,
+          [instancesData.map(i => i.instanceId)]
+        );
+
+        const existingSet = new Set(existingInstanceIds.rows.map(r => r.orthanc_instance_id));
+        const newInstances = instancesData.filter(i => !existingSet.has(i.instanceId));
+
+        if (newInstances.length > 0) {
+          const TAG_BATCH_SIZE = 20;
+          const allInstanceTags = [];
+
+          // Fetch instance tags in batches
+          for (let i = 0; i < newInstances.length; i += TAG_BATCH_SIZE) {
+            if (requestAborted) {
+              await handleAbort(uploadedToOrthanc, client, res);
+              return;
             }
+
+            const batch = newInstances.slice(i, i + TAG_BATCH_SIZE);
+            const tagPromises = batch.map(inst => 
+              orthancService.getInstanceTags(inst.instanceId)
+            );
+            const batchTags = await Promise.all(tagPromises);
+            allInstanceTags.push(...batchTags);
           }
+
+          // Bulk insert instances
+          const instanceValues = newInstances.map((inst, idx) => 
+            `($${idx * 7 + 1}, $${idx * 7 + 2}, $${idx * 7 + 3}, $${idx * 7 + 4}, $${idx * 7 + 5}, $${idx * 7 + 6}, $${idx * 7 + 7})`
+          ).join(',');
+
+          const instanceParams = [];
+          newInstances.forEach((inst, idx) => {
+            const tags = allInstanceTags[idx];
+            instanceParams.push(
+              inst.dbSeriesId,
+              inst.instanceId,
+              tags.SOPInstanceUID,
+              tags.InstanceNumber || null,
+              inst.fileName,
+              inst.fileSize,
+              JSON.stringify(tags)
+            );
+          });
+
+          await client.query(
+            `INSERT INTO imaging_instances
+              (imaging_series_id, orthanc_instance_id, sop_instance_uid,
+               instance_number, file_name, file_size, dicom_metadata)
+             VALUES ${instanceValues}`,
+            instanceParams
+          );
+
+          if (requestAborted) {
+            await handleAbort(uploadedToOrthanc, client, res);
+            return;
+          }
+
+          console.log(`Inserted ${newInstances.length} new instances`);
         }
 
         createdStudies.push({
@@ -281,11 +507,9 @@ export const uploadDicomStudy = async (req, res) => {
           orthanc_study_id: orthancStudyId,
           study_instance_uid: studyInstanceUID,
           modality: primaryModality,
-          series_count: Object.keys(seriesBySeriesId).length,
+          series_count: uniqueSeriesIds.length,
           instance_count: instances.length
         });
-
-        console.log(`Successfully processed study ${orthancStudyId}`);
 
       } catch (studyError) {
         console.error(`Error processing study ${orthancStudyId}:`, studyError);
@@ -296,7 +520,14 @@ export const uploadDicomStudy = async (req, res) => {
       }
     }
 
+    // Final abort check before commit
+    if (requestAborted) {
+      await handleAbort(uploadedToOrthanc, client, res);
+      return;
+    }
+
     if (createdStudies.length === 0) {
+      await cleanupOrthancUploads(uploadedToOrthanc);
       await client.query("ROLLBACK");
       return res.status(500).json({
         status: "failed",
@@ -305,16 +536,17 @@ export const uploadDicomStudy = async (req, res) => {
       });
     }
 
-    // Get viewer URL for the first study
+    // ==================== STEP 7: Get viewer URLs and complete ====================
     const firstStudy = createdStudies[0];
-    const viewerUrl = await orthancService.getBestViewerUrl(firstStudy.orthanc_study_id);
-    const allViewers = await orthancService.getAllViewerUrls(firstStudy.orthanc_study_id);
+    const [viewerUrl, allViewers] = await Promise.all([
+      orthancService.getBestViewerUrl(firstStudy.orthanc_study_id),
+      orthancService.getAllViewerUrls(firstStudy.orthanc_study_id)
+    ]);
 
-    // Calculate totals
     const totalFiles = uploadResults.length;
     const totalSize = uploadResults.reduce((sum, r) => sum + r.size, 0);
 
-    // Log audit
+    // Log audit trail
     await logAudit({
       user_id,
       table_name: "imaging_studies",
@@ -333,8 +565,15 @@ export const uploadDicomStudy = async (req, res) => {
       endpoint: req.originalUrl
     });
 
+    // Clear tracking since we're committing
+    uploadedToOrthanc = [];
+
+    // Commit transaction
     await client.query("COMMIT");
 
+    console.log(`✅ Upload complete: ${createdStudies.length} studies, ${totalFiles} files`);
+
+    // Send success response
     res.status(201).json({
       status: "success",
       message: `Successfully uploaded ${createdStudies.length} study/studies with ${totalFiles} files`,
@@ -349,17 +588,43 @@ export const uploadDicomStudy = async (req, res) => {
     });
 
   } catch (error) {
-    await client.query("ROLLBACK");
     console.error("Error uploading DICOM study:", error);
-    console.error("Error stack:", error.stack);
-    res.status(500).json({
-      status: "failed",
-      message: "Server error during DICOM upload",
-      error: error.message,
-      details: process.env.NODE_ENV === 'development' ? error.stack : undefined
-    });
+    
+    // Rollback database changes
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackError) {
+      console.error("Error during rollback:", rollbackError);
+    }
+    
+    // Clean up Orthanc uploads
+    if (uploadedToOrthanc.length > 0) {
+      console.log(`Cleaning up ${uploadedToOrthanc.length} uploaded instances...`);
+      await cleanupOrthancUploads(uploadedToOrthanc);
+    }
+    
+    // Send error response if headers not sent
+    if (!res.headersSent) {
+      if (requestAborted) {
+        return res.status(499).json({
+          status: "cancelled",
+          message: "Upload cancelled by client"
+        });
+      }
+      
+      res.status(500).json({
+        status: "failed",
+        message: "Server error during DICOM upload",
+        error: error.message
+      });
+    }
   } finally {
-    client.release();
+    // Always release the client
+    try {
+      client.release();
+    } catch (releaseError) {
+      console.error("Error releasing client:", releaseError);
+    }
   }
 };
 

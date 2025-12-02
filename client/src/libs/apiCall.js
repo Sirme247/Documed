@@ -4,7 +4,10 @@ import useStore from "../store";
 const API_URL = "http://localhost:5000/api-v1";
 
 const api = axios.create({
-    baseURL: API_URL
+  baseURL: API_URL,
+  timeout: 0, // No timeout for file uploads
+  // Important: Allow axios to properly handle abort signals
+  validateStatus: (status) => status < 500
 });
 
 export function setAuthToken(token) {
@@ -19,12 +22,18 @@ export function setAuthToken(token) {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
+    // Don't intercept abort/cancel errors - let them pass through
+    if (axios.isCancel(error) || error.code === 'ERR_CANCELED') {
+      return Promise.reject(error);
+    }
+    
+    // Handle auth errors
     if (error.response?.status === 401) {
-      // Token is invalid/expired
       const { signOut } = useStore.getState();
       signOut();
       window.location.href = '/sign-in';
     }
+    
     return Promise.reject(error);
   }
 );
@@ -35,7 +44,7 @@ if (storedUser) {
   try {
     const userData = JSON.parse(storedUser);
     if (userData.token) {
-      setAuthToken(userData.token); // Use the function instead
+      setAuthToken(userData.token);
     }
   } catch (error) {
     console.error("Failed to restore token:", error);

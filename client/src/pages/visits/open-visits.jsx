@@ -321,7 +321,7 @@ const OpenVisits = () => {
                 <th>Priority</th>
                 <th>Visit Type</th>
                 
-                <th>Branch</th>
+                {/* <th>Branch</th> */}
                 <th>Time</th>
                 <th>Reason</th>
                 <th>Actions</th>
@@ -356,9 +356,9 @@ const OpenVisits = () => {
                   </td>
                   <td>{visit.visit_type}</td>
                   
-                  <td>
+                  {/* <td>
                     {visit.branch_name || <span style={{ color: '#9ca3af' }}>N/A</span>}
-                  </td>
+                  </td> */}
                   <td>
                     <div style={{ fontSize: '13px', fontWeight: '500' }}>
                       {getTimeSinceVisit(visit.visit_date)}

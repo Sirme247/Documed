@@ -101,14 +101,14 @@ const VisitsAllHospital = () => {
             All visits in your hospital
           </p>
         </div>
-        <div className="header-actions">
+        {/* <div className="header-actions">
           <button 
             className="btn-primary"
             onClick={() => navigate('/visits/new')}
           >
             + New Visit
           </button>
-        </div>
+        </div> */}
       </div>
 
       {/* Stats Cards */}

@@ -8,6 +8,7 @@ import api from "../../libs/apiCall.js";
 import { toast } from "react-hot-toast";
 import useStore from "../../store"; 
 
+// REMOVED password from schema
 const UserRegistrationSchema = z.object({
   first_name: z.string().min(2, "First name must be at least 2 characters"),
   middle_name: z.string().optional(),
@@ -24,10 +25,6 @@ const UserRegistrationSchema = z.object({
   email: z.string().email("Invalid email format"),
   contact_info: z.string().optional(),
   address_line: z.string().optional(),
-  password: z
-    .string()
-    .min(6, "Password must be at least 6 characters")
-    .regex(/^(?=.*[A-Za-z])(?=.*\d)[A-Za-z\d]{6,}$/, "Password must include at least one letter and one number"),
   role_id: z.string().min(1, "Please select a role"),
   license_number: z.string().optional(),
   license_expiry: z.string().optional(),
@@ -58,7 +55,6 @@ const UserRegistration = () => {
   const [loading, setLoading] = useState(false);
   const { user } = useStore(); 
 
-  // Get prefilled data from navigation state (from Hospital/Branch Details pages)
   const prefilledFromNavigation = location.state?.prefillData;
   
   const {
@@ -83,9 +79,7 @@ const UserRegistration = () => {
   const lastName = watch("last_name");
   const dateOfBirth = watch("date_of_birth");
 
-  // Prefill logic with priority: Navigation state > User's hospital/branch
   useEffect(() => {
-    // Priority 1: Data from navigation (Hospital/Branch Details page)
     if (prefilledFromNavigation) {
       if (prefilledFromNavigation.hospital_id) {
         setValue("hospital_id", prefilledFromNavigation.hospital_id.toString());
@@ -94,7 +88,6 @@ const UserRegistration = () => {
         setValue("branch_id", prefilledFromNavigation.branch_id.toString());
       }
     }
-    // Priority 2: User's own hospital/branch (if no navigation data and user is Local Admin)
     else if (user && user.role_id === 2) {
       if (user.hospital_id) {
         setValue("hospital_id", user.hospital_id.toString());
@@ -105,10 +98,6 @@ const UserRegistration = () => {
     }
   }, [user, prefilledFromNavigation, setValue]);
 
-  /**
-   * Generate username: FirstInitial + LastName + BirthYear + Random2Digits
-   * Example: John Doe born 1990 -> jdoe90XX
-   */
   const generateUsername = () => {
     if (!firstName || !lastName) {
       toast.error("Please enter first and last name first");
@@ -118,7 +107,7 @@ const UserRegistration = () => {
     const firstInitial = firstName.charAt(0).toLowerCase();
     const cleanLastName = lastName.toLowerCase().replace(/\s+/g, '');
     const birthYear = dateOfBirth ? dateOfBirth.split('-')[0].slice(-2) : '';
-    const randomDigits = Math.floor(10 + Math.random() * 90); // Random 2 digits (10-99)
+    const randomDigits = Math.floor(10 + Math.random() * 90);
 
     const username = `${firstInitial}${cleanLastName}${birthYear}${randomDigits}`;
     setValue("username", username);
@@ -131,7 +120,6 @@ const UserRegistration = () => {
     try {
       setLoading(true);
 
-      // Check if doctor already exists (for role_id 3 or 4)
       if (data.role_id === "3" || data.role_id === "4") {
         try {
           const checkResponse = await api.get('/users/check-existing-practitioner', {
@@ -183,10 +171,22 @@ const UserRegistration = () => {
       };
 
       const { data: res } = await api.post("/users/register-user", formattedData);
-      toast.success("User registered successfully!");
+      
+      // Show success with email notification
+      if (res.email_sent) {
+        toast.success(
+          `User registered successfully! Login credentials have been sent to ${formattedData.email}`,
+          { duration: 6000 }
+        );
+      } else {
+        toast.success("User registered successfully!", { duration: 4000 });
+        if (res.email_error) {
+          toast.error(`Email delivery failed: ${res.email_error}`, { duration: 6000 });
+        }
+      }
+      
       reset();
       
-      // Navigate back to where we came from if applicable
       if (prefilledFromNavigation?.returnPath) {
         navigate(prefilledFromNavigation.returnPath);
       }
@@ -198,14 +198,11 @@ const UserRegistration = () => {
     }
   };
 
-  // Check if fields are disabled (prefilled and locked)
   const isHospitalIdLocked = !!(prefilledFromNavigation?.hospital_id || (user?.role_id === 2 && user?.hospital_id));
   const isBranchIdLocked = !!(prefilledFromNavigation?.branch_id || (user?.role_id === 2 && user?.branch_id));
 
-  // Determine available roles based on current user's role
   const getAvailableRoles = () => {
     if (user?.role_id === 1) {
-      // Global Admin can register any role
       return [
         { value: "2", label: "Hospital Admin" },
         { value: "3", label: "Medical Practitioner (e.g. doctors)" },
@@ -213,7 +210,6 @@ const UserRegistration = () => {
         { value: "5", label: "Receptionist" }
       ];
     } else if (user?.role_id === 2) {
-      // Local Admin can only register Medical Practitioner, Medical Staff, and Receptionist
       return [
         { value: "3", label: "Medical Practitioner (e.g. doctors)" },
         { value: "4", label: "Medical Staff (e.g Nurses)" },
@@ -225,7 +221,6 @@ const UserRegistration = () => {
 
   const availableRoles = getAvailableRoles();
 
-  // Calculate max date (18 years ago for minimum age)
   const today = new Date();
   const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate())
     .toISOString()
@@ -245,7 +240,6 @@ const UserRegistration = () => {
         )}
       </div>
 
-      {/* Info banner when prefilled */}
       {prefilledFromNavigation && (
         <div style={{
           backgroundColor: '#dbeafe',
@@ -259,6 +253,19 @@ const UserRegistration = () => {
           </p>
         </div>
       )}
+
+      {/* Password Info Banner */}
+      <div style={{
+        backgroundColor: '#f0fdf4',
+        border: '1px solid #16a34a',
+        borderRadius: '8px',
+        padding: '16px',
+        marginBottom: '24px'
+      }}>
+        <p style={{ margin: 0, color: '#15803d', fontWeight: '500' }}>
+          🔐 A secure password will be automatically generated and sent to the user's email address
+        </p>
+      </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
         <div className="form-section">
@@ -331,6 +338,9 @@ const UserRegistration = () => {
               {errors.email && (
                 <div className="error-message">{errors.email.message}</div>
               )}
+              <small style={{ color: '#059669', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+                📧 Login credentials will be sent to this email
+              </small>
             </div>
 
             <div className="form-group">
@@ -348,47 +358,36 @@ const UserRegistration = () => {
         <div className="form-section">
           <h3>Account Details</h3>
           
-          <div className="form-row">
-            <div className="form-group">
-              <label>Username *</label>
-              <div style={{ display: 'flex', gap: '8px' }}>
-                <input 
-                  {...register("username")} 
-                  placeholder="Will be auto-generated"
-                  style={{ flex: 1 }}
-                />
-                <button
-                  type="button"
-                  onClick={generateUsername}
-                  className="btn-secondary"
-                  style={{ 
-                    whiteSpace: 'nowrap',
-                    padding: '8px 16px',
-                    fontSize: '14px'
-                  }}
-                >
-                  ✨ 
-                </button>
-              </div>
-              {errors.username && (
-                <div className="error-message">{errors.username.message}</div>
-              )}
-              <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                Format: firstInitial + lastName + birthYear + random digits (e.g., jdoe9047)
-              </small>
+          <div className="form-group">
+            <label>Username *</label>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <input 
+                {...register("username")} 
+                placeholder="Will be auto-generated"
+                style={{ flex: 1 }}
+              />
+              <button
+                type="button"
+                onClick={generateUsername}
+                className="btn-secondary"
+                style={{ 
+                  whiteSpace: 'nowrap',
+                  padding: '8px 16px',
+                  fontSize: '14px'
+                }}
+              >
+                ✨ Generate
+              </button>
             </div>
-
-            <div className="form-group">
-              <label>Password *</label>
-              <input type="password" {...register("password")} placeholder="Min 6 characters" />
-              {errors.password && (
-                <div className="error-message">{errors.password.message}</div>
-              )}
-              <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                Must contain at least one letter and one number
-              </small>
-            </div>
+            {errors.username && (
+              <div className="error-message">{errors.username.message}</div>
+            )}
+            <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
+              Format: firstInitial + lastName + birthYear + random digits (e.g., jdoe9047)
+            </small>
           </div>
+
+          {/* PASSWORD FIELD REMOVED - AUTO-GENERATED */}
         </div>
 
         <div className="form-section">
@@ -423,62 +422,8 @@ const UserRegistration = () => {
               )}
             </div>
           </div>
-
-          {/* <div className="form-row">
-            <div className="form-group">
-              <label>Hospital ID</label>
-              <input 
-                type="number" 
-                {...register("hospital_id")} 
-                disabled={isHospitalIdLocked}
-                style={isHospitalIdLocked ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
-                placeholder="Hospital assignment"
-              />
-              {isHospitalIdLocked && (
-                <small style={{ color: '#059669', fontSize: '12px', fontWeight: '500' }}>
-                  ✓ Auto-filled
-                </small>
-              )}
-            </div>
-
-            <div className="form-group">
-              <label>Branch ID</label>
-              <input 
-                type="number" 
-                {...register("branch_id")} 
-                disabled={isBranchIdLocked}
-                style={isBranchIdLocked ? { backgroundColor: '#f3f4f6', cursor: 'not-allowed' } : {}}
-                placeholder="Optional branch assignment"
-              />
-              {isBranchIdLocked && (
-                <small style={{ color: '#059669', fontSize: '12px', fontWeight: '500' }}>
-                  ✓ Auto-filled
-                </small>
-              )}
-            </div>
-
-            {(roleId === "3") && (
-              <div className="form-group">
-                <label>Start Date *</label>
-                <input 
-                  type="date" 
-                  {...register("start_date")}
-                  style={{
-                    padding: '10px',
-                    fontSize: '14px',
-                    border: '1px solid #d1d5db',
-                    borderRadius: '6px'
-                  }}
-                />
-                <small style={{ color: '#6b7280', fontSize: '12px', marginTop: '4px', display: 'block' }}>
-                  Start date at this hospital
-                </small>
-              </div>
-            )}
-          </div> */}
         </div>
 
-        {/* Healthcare provider fields */}
         {(roleId === "3" || roleId === "4") && (
           <div className="form-section">
             <h3>Professional Credentials</h3>
@@ -500,20 +445,9 @@ const UserRegistration = () => {
                   <option value="Uganda">Uganda</option>
                   <option value="Tanzania">Tanzania</option>
                   <option value="Rwanda">Rwanda</option>
-                  <option value="Burundi">Burundi</option>
-                  <option value="South Sudan">South Sudan</option>
-                  <option value="Ethiopia">Ethiopia</option>
-                  <option value="Somalia">Somalia</option>
                   <option value="Nigeria">Nigeria</option>
                   <option value="Ghana">Ghana</option>
                   <option value="South Africa">South Africa</option>
-                  <option value="Egypt">Egypt</option>
-                  <option value="Zimbabwe">Zimbabwe</option>
-                  <option value="Zambia">Zambia</option>
-                  <option value="Malawi">Malawi</option>
-                  <option value="Botswana">Botswana</option>
-                  <option value="Namibia">Namibia</option>
-                  <option value="Mozambique">Mozambique</option>
                   <option value="Other">Other</option>
                 </select>
                 {errors.country && (
@@ -546,7 +480,7 @@ const UserRegistration = () => {
 
         <div style={{ display: 'flex', gap: '12px', marginTop: '24px' }}>
           <button type="submit" className="submit-btn" disabled={loading} style={{ flex: 1 }}>
-            {loading ? "Registering..." : "Register User"}
+            {loading ? "Registering & Sending Email..." : "Register User"}
           </button>
           {prefilledFromNavigation?.returnPath && (
             <button

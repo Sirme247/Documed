@@ -134,12 +134,12 @@ const VisitsDayHospital = () => {
           >
             🔄 Refresh
           </button>
-          <button 
+          {/* <button 
             className="btn-primary"
             onClick={() => navigate('/visits/new')}
           >
             + New Visit
-          </button>
+          </button> */}
         </div>
       </div>
 
@@ -157,20 +157,7 @@ const VisitsDayHospital = () => {
             {visits.length}
           </div>
         </div>
-        {/* <div className="stat-card" style={{ borderLeft: '4px solid #dc2626' }}> */}
-        <div className="stat-card" >
-          <div style={{ fontSize: '14px', color: '#6b7280' }}>Emergency</div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', marginTop: '8px', color: '#000000ff' }}>
-            {visits.filter(v => v.priority_level === 'Emergency').length}
-          </div>
-        </div>
-        {/* <div className="stat-card" style={{ borderLeft: '4px solid #ea580c' }}> */}
-        <div className="stat-card" >
-          <div style={{ fontSize: '14px', color: '#6b7280' }}>Urgent</div>
-          <div style={{ fontSize: '32px', fontWeight: 'bold', marginTop: '8px', color: '#000000ff' }}>
-            {visits.filter(v => v.priority_level === 'Urgent').length}
-          </div>
-        </div>
+        
         {/* <div className="stat-card" style={{ borderLeft: '4px solid #059669' }}> */}
         <div className="stat-card" >
           <div style={{ fontSize: '14px', color: '#6b7280' }}>This Hour</div>

@@ -1,0 +1,26 @@
+
+
+
+*.log
+
+# Environment files
+.env
+server/.env
+orthanc/.env
+*.env.local
+
+# Dependencies
+node_modules/
+*/node_modules/
+
+# Database backups
+database/backups/*.sql
+database/backups/*.dump
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db

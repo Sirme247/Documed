@@ -1,8 +1,13 @@
 import axios from 'axios';
 
 class OrthancService {
-  constructor() {
+ constructor() {
+    // Internal URL for API calls (server → orthanc)
     this.baseUrl = process.env.ORTHANC_URL || 'http://localhost:8042';
+    
+    // Public URL for browser-accessible viewer links
+    this.publicUrl = process.env.ORTHANC_PUBLIC_URL || process.env.ORTHANC_URL || 'http://localhost:8042';
+    
     this.username = process.env.ORTHANC_USERNAME || 'orthanc';
     this.password = process.env.ORTHANC_PASSWORD || 'password';
     
@@ -11,14 +16,15 @@ class OrthancService {
     const authHeader = `Basic ${Buffer.from(authString).toString('base64')}`;
     
     this.client = axios.create({
-      baseURL: this.baseUrl,
+      baseURL: this.baseUrl, // Still use internal URL for API calls
       headers: {
         'Authorization': authHeader,
         'Content-Type': 'application/json'
       },
-      timeout: 30000 // 30 seconds
+      timeout: 30000
     });
   }
+
 
   // Upload DICOM file(s)
   async uploadDicom(dicomBuffer) {
@@ -223,63 +229,68 @@ class OrthancService {
       // Get the study details to extract StudyInstanceUID
       const study = await this.getStudy(studyId);
       
-      // Stone Web Viewer needs the DICOM StudyInstanceUID, not Orthanc's internal ID
       const studyInstanceUID = study.MainDicomTags?.StudyInstanceUID;
       
       if (studyInstanceUID) {
-        return `${this.baseUrl}/stone-webviewer/index.html?study=${studyInstanceUID}`;
+        // Use publicUrl instead of baseUrl
+        return `${this.publicUrl}/stone-webviewer/index.html?study=${studyInstanceUID}`;
       }
       
-      // Fallback to internal ID if StudyInstanceUID not found
-      return `${this.baseUrl}/stone-webviewer/index.html?study=${studyId}`;
+      return `${this.publicUrl}/stone-webviewer/index.html?study=${studyId}`;
     } catch (error) {
       console.error('Error getting StudyInstanceUID:', error.message);
-      // Fallback to internal ID
-      return `${this.baseUrl}/stone-webviewer/index.html?study=${studyId}`;
+      return `${this.publicUrl}/stone-webviewer/index.html?study=${studyId}`;
     }
   }
 
+
   // Get Osimis Web Viewer URL (alternative advanced viewer)
-  async getOsimisViewerUrl(studyId) {
+ async getOsimisViewerUrl(studyId) {
     try {
       const study = await this.getStudy(studyId);
       const studyInstanceUID = study.MainDicomTags?.StudyInstanceUID;
       
       if (studyInstanceUID) {
-        return `${this.baseUrl}/osimis-viewer/app/index.html?study=${studyInstanceUID}`;
+        return `${this.publicUrl}/osimis-viewer/app/index.html?study=${studyInstanceUID}`;
       }
       
-      return `${this.baseUrl}/osimis-viewer/app/index.html?study=${studyId}`;
+      return `${this.publicUrl}/osimis-viewer/app/index.html?study=${studyId}`;
     } catch (error) {
       console.error('Error getting StudyInstanceUID:', error.message);
-      return `${this.baseUrl}/osimis-viewer/app/index.html?study=${studyId}`;
+      return `${this.publicUrl}/osimis-viewer/app/index.html?study=${studyId}`;
     }
   }
 
-  // Get direct Orthanc Explorer URL (basic viewer)
+
+    // Get direct Orthanc Explorer URL (basic viewer)
   getOrthancExplorerUrl(studyId) {
-    // Orthanc Explorer uses the internal ID, not StudyInstanceUID
-    return `${this.baseUrl}/app/explorer.html#study?uuid=${studyId}`;
+    // Use publicUrl instead of baseUrl
+    return `${this.publicUrl}/app/explorer.html#study?uuid=${studyId}`;
   }
 
-  // Get OHIF Viewer URL (if installed)
+ // Get OHIF Viewer URL (if installed)
   getOHIFViewerUrl(studyId) {
-    return `${this.baseUrl}/ohif/viewer?StudyInstanceUIDs=${studyId}`;
+    return `${this.publicUrl}/ohif/viewer?StudyInstanceUIDs=${studyId}`;
+  }
+  // Get DICOM Web viewer URL
+  getDicomWebViewerUrl(studyId) {
+    return `${this.publicUrl}/dicom-web/studies/${studyId}`;
   }
 
   // Check which viewers are available
+  
   async checkAvailableViewers() {
     const viewers = {
       stoneViewer: false,
       osimisViewer: false,
-      orthancExplorer: true, // Always available with Orthanc
+      orthancExplorer: true,
       ohifViewer: false,
       dicomWeb: false
     };
 
     try {
-      // Check Stone Web Viewer (most common)
-      const stoneResponse = await axios.get(`${this.baseUrl}/stone-webviewer/index.html`, {
+      // Use publicUrl for checking viewers (browser-accessible)
+      const stoneResponse = await axios.get(`${this.publicUrl}/stone-webviewer/index.html`, {
         timeout: 2000,
         validateStatus: (status) => status < 500,
         auth: {
@@ -295,8 +306,7 @@ class OrthancService {
     }
 
     try {
-      // Check Osimis Web Viewer (alternative)
-      const osimisResponse = await axios.get(`${this.baseUrl}/osimis-viewer/app/index.html`, {
+      const osimisResponse = await axios.get(`${this.publicUrl}/osimis-viewer/app/index.html`, {
         timeout: 2000,
         validateStatus: (status) => status < 500,
         auth: {
@@ -312,8 +322,7 @@ class OrthancService {
     }
 
     try {
-      // Check OHIF Viewer
-      const ohifResponse = await axios.get(`${this.baseUrl}/ohif/`, {
+      const ohifResponse = await axios.get(`${this.publicUrl}/ohif/`, {
         timeout: 2000,
         validateStatus: (status) => status < 500,
         auth: {
@@ -329,7 +338,6 @@ class OrthancService {
     }
 
     try {
-      // Check DICOM Web (for API access)
       const dicomWebResponse = await this.client.get('/dicom-web/studies', {
         timeout: 2000,
         validateStatus: (status) => status < 500
@@ -436,6 +444,63 @@ class OrthancService {
       }];
     }
   }
+  // Add this method to your OrthancService class
+
+// Get series with all instances metadata efficiently
+async getSeriesWithInstances(seriesId) {
+  try {
+    const [seriesInfo, instances] = await Promise.all([
+      this.client.get(`/series/${seriesId}`),
+      this.client.get(`/series/${seriesId}/instances`)
+    ]);
+    
+    return {
+      series: seriesInfo.data,
+      instances: instances.data
+    };
+  } catch (error) {
+    throw new Error(`Failed to fetch series with instances: ${error.message}`);
+  }
+}
+
+// Get bulk metadata for multiple instances
+async getBulkInstanceTags(instanceIds) {
+  try {
+    const promises = instanceIds.map(id => 
+      this.client.get(`/instances/${id}/tags?simplify`)
+    );
+    const results = await Promise.all(promises);
+    return results.map(r => r.data);
+  } catch (error) {
+    throw new Error(`Failed to fetch bulk instance tags: ${error.message}`);
+  }
+}
+// In orthancService.js, add this method:
+
+// Delete multiple instances in bulk
+async deleteInstances(instanceIds) {
+  try {
+    const deletePromises = instanceIds.map(id => 
+      this.client.delete(`/instances/${id}`).catch(err => ({
+        error: true,
+        instanceId: id,
+        message: err.message
+      }))
+    );
+    
+    const results = await Promise.all(deletePromises);
+    const errors = results.filter(r => r.error);
+    
+    return {
+      success: errors.length === 0,
+      deleted: instanceIds.length - errors.length,
+      total: instanceIds.length,
+      errors
+    };
+  } catch (error) {
+    throw new Error(`Failed to delete instances: ${error.message}`);
+  }
+}
 
   // Extract key metadata from DICOM tags
   extractKeyMetadata(tags) {

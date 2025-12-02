@@ -167,7 +167,7 @@ const PatientList = () => {
             name="search"
             value={filters.search}
             onChange={handleFilterChange}
-            placeholder="Search by name, email, phone, national ID, or MRN..."
+            placeholder="Search by name, email, phone number or national ID"
             className="search-input"
           />
           <button onClick={applyFilters} className="btn-search">
