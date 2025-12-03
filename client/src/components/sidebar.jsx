@@ -27,6 +27,7 @@ const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
   const menuConfig = {
+    // Global Admin
     1: [
       {
         title: 'Dashboard',
@@ -38,43 +39,48 @@ const Sidebar = () => {
         icon: Hospital,
         submenu: [
           { title: 'All Hospitals', path: '/hospitals/list' },
-          { title: 'Register Hospital', path: '/hospitals/register' },
-          // { title: 'Register Branch', path: '/hospitals/register-branch' }
+          { title: 'Register Hospital', path: '/hospitals/register' }
         ]
       },
       {
         title: 'Users',
         icon: Users,
-        // submenu: [
-          title: 'All Users', path: '/users/list' ,
-          // { title: 'Register User', path: '/users/register' },
-          // { title: 'Register Existing Doctor', path: '/users/register-existing-doctor' }
-        // ]
+        submenu: [
+          { title: 'All Users', path: '/users/list' }
+        ]
       },
       {
         title: 'Patients',
         icon: UserCheck,
-        path: '/patients/list',
-        
+        submenu: [
+          { title: 'All Patients', path: '/patients/list' }
+        ]
+      },
+      {
+        title: 'Audit Logs',
+        icon: ClipboardList,
+        path: '/audits/logs'
       },
       {
         title: 'Profile',
         icon: User,
         path: '/profile/user' 
-        
-      },
-      {
-        title: 'Audit Logs',
-        icon: ClipboardList,
-        path: './audits/logs'
       }
     ],
 
+    // Local Admin
     2: [
       {
         title: 'Dashboard',
         icon: LayoutDashboard,
         path: '/dashboard/local-admin'
+      },
+      {
+        title: 'Hospital',
+        icon: Hospital,
+        submenu: [
+          { title: 'Hospital Profile', path: '/hospitals/current/get-profile' }
+        ]
       },
       {
         title: 'Users',
@@ -85,30 +91,21 @@ const Sidebar = () => {
           { title: 'Register Existing Doctor', path: '/users/register-existing-doctor' }
         ]
       },
-      // {
-      //   title: 'Patients',
-      //   icon: UserCheck,
-      //   submenu: [
-      //     { title: 'All Patients', path: '/patients/list' },
-      //     { title: 'Register Patient', path: '/patients/register' },
-      //     { title: 'Admitted Patients', path: '/patients/frequent' }
-      //   ]
-      // },
-      // {
-      //   title: 'Visits',
-      //   icon: ClipboardList,
-      //   submenu: [
-      //     // { title: 'New Visit', path: '/visits/new' },
-      //     { title: "Today's Visits", path: '/visits/hospital/today' },
-      //     { title: 'All Hospital Visits', path: '/visits/hospital/all' }  
-      //   ]
-      // },
       {
-        title: 'Hospital',
-        icon: Hospital,
-        path: '/hospitals/current/get-profile'
+        title: 'Patients',
+        icon: UserCheck,
+        submenu: [
+          { title: 'All Patients', path: '/patients/list' }
+        ]
       },
-     
+      {
+        title: 'Visits',
+        icon: ClipboardList,
+        submenu: [
+          { title: "Today's Visits", path: '/visits/hospital/today' },
+          { title: 'All Hospital Visits', path: '/visits/hospital/all' }
+        ]
+      },
       {
         title: 'Profile',
         icon: User,
@@ -116,6 +113,7 @@ const Sidebar = () => {
       }
     ],
 
+    // Doctor
     3: [
       {
         title: 'Dashboard',
@@ -135,23 +133,11 @@ const Sidebar = () => {
         title: 'Visits',
         icon: ClipboardList,
         submenu: [
-          // { title: 'New Visit', path: '/visits/new' },
+          { title: 'Open Visits', path: '/visits/open' },
           { title: "Today's Visits", path: '/visits/hospital/today' },
-          { title: 'All Hospital Visits', path: '/visits/hospital/all' },
-          { title: 'Open Visits', path: '/visits/open' }
+          { title: 'All Hospital Visits', path: '/visits/hospital/all' }
         ]
       },
-      // {
-      //   title: 'Clinical Records',
-      //   icon: FileText,
-      //   submenu: [
-      //     { title: 'Record Diagnosis', path: '/visits/record-diagnosis' },
-      //     { title: 'Record Treatment', path: '/visits/record-treatment' },
-      //     { title: 'Record Prescription', path: '/visits/record-prescriptions' },
-      //     { title: 'Order Lab Tests', path: '/visits/record-lab-results' },
-      //     { title: 'Order Imaging', path: '/visits/record-imaging-results' }
-      //   ]
-      // },
       {
         title: 'Profile',
         icon: User,
@@ -159,6 +145,7 @@ const Sidebar = () => {
       }
     ],
 
+    // Nurse
     4: [
       {
         title: 'Dashboard',
@@ -178,8 +165,7 @@ const Sidebar = () => {
         title: 'Visits',
         icon: ClipboardList,
         submenu: [
-          // { title: 'New Visit', path: '/visits/new' },
-           { title: 'Open Visits', path: '/visits/open' },
+          { title: 'Open Visits', path: '/visits/open' },
           { title: "Today's Visits", path: '/visits/hospital/today' },
           { title: 'All Hospital Visits', path: '/visits/hospital/all' }
         ]
@@ -191,6 +177,7 @@ const Sidebar = () => {
       }
     ],
 
+    // Receptionist
     5: [
       {
         title: 'Dashboard',
@@ -210,8 +197,7 @@ const Sidebar = () => {
         title: 'Visits',
         icon: ClipboardList,
         submenu: [
-          // { title: 'New Visit', path: '/visits/new' },
-           { title: 'Open Visits', path: '/visits/open' },
+          { title: 'Open Visits', path: '/visits/open' },
           { title: "Today's Visits", path: '/visits/hospital/today' },
           { title: 'All Hospital Visits', path: '/visits/hospital/all' }
         ]

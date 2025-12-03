@@ -6,8 +6,6 @@ import { corsOptions } from './libs/cors.js';
 import routes from './routes/index.js';
 import { scheduleAuditCleanup } from './controllers/auditController.js';
 
-
-
 dotenv.config();
 
 const PORT = process.env.PORT || 9000;
@@ -15,8 +13,13 @@ const PORT = process.env.PORT || 9000;
 const app = express();
 
 // CORS must be before other middleware
-
 app.use(cors(corsOptions));
+
+// Prevent search engine indexing - add X-Robots-Tag header to all responses
+app.use((req, res, next) => {
+    res.setHeader('X-Robots-Tag', 'noindex, nofollow');
+    next();
+});
 
 // Body parsers with proper limits
 app.use(express.json({ limit: '50mb' }));
