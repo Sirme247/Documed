@@ -162,7 +162,7 @@ const RecordLabTest = () => {
       toast.success(res.message || "Lab test recorded successfully!");
       
       if (visit_id) {
-        navigate(`/visits/${visit_id}`);
+        navigate(`/visits/details/${visit_id}`);
       } else {
         reset();
         setSelectedFile(null);
@@ -186,7 +186,7 @@ const RecordLabTest = () => {
       <h2>Record Lab Test</h2>
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Visit Information</h3>
           
           <div className="form-group">
@@ -202,7 +202,7 @@ const RecordLabTest = () => {
               <div className="error-message">{errors.visit_id.message}</div>
             )}
           </div>
-        </div>
+        </div> */}
 
         <div className="form-section">
           <h3>Test Details</h3>

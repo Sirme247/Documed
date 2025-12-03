@@ -82,7 +82,7 @@ const RecordVitals = () => {
 
       toast.success(res.message || "Vitals recorded successfully!");
       if (visit_id) {
-        navigate(`/visits/${visit_id}`);
+        navigate(`/visits/details/${visit_id}`);
       } else {
         reset();
       }
@@ -99,7 +99,7 @@ const RecordVitals = () => {
       <h2>Record Patient Vitals</h2>
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Visit Information</h3>
           
           <div className="form-group">
@@ -113,7 +113,7 @@ const RecordVitals = () => {
               <div className="error-message">{errors.visit_id.message}</div>
             )}
           </div>
-        </div>
+        </div> */}
 
         <div className="form-section">
           <h3>Vital Signs</h3>

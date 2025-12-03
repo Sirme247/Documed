@@ -52,7 +52,12 @@ const RecordDiagnosis = () => {
       const { data: res } = await api.post("/visits/record-diagnosis", formattedData);
 
       toast.success(res.message || "Diagnosis recorded successfully!");
+
+      if (data.visit_id) {
+        navigate(`/visits/details/${data.visit_id}`);
+      } else {
       reset();
+    }
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.message || error.message);
@@ -66,7 +71,7 @@ const RecordDiagnosis = () => {
       <h2>Record Diagnosis</h2>
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Visit Information</h3>
           
           <div className="form-group">
@@ -76,7 +81,7 @@ const RecordDiagnosis = () => {
               <div className="error-message">{errors.visit_id.message}</div>
             )}
           </div>
-        </div>
+        </div> */}
 
         <div className="form-section">
           <h3>Diagnosis Details</h3>

@@ -20,7 +20,7 @@ const UserProfile = () => {
     const fetchUserDetails = async () => {
       try {
         setLoading(true);
-        // ✅ This endpoint gets YOUR OWN profile (no user_id needed)
+        // This endpoint gets YOUR OWN profile
         const { data } = await api.get('/users/user-profile');
         
         if (data.status === "success") {
@@ -172,35 +172,7 @@ const UserProfile = () => {
       {/* Statistics Cards (for providers) */}
       {provider && statistics && (
         <div className="stats-grid">
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: '#dbeafe' }}>
-              <Users size={24} style={{ color: '#1e40af' }} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{statistics.total_patients || 0}</div>
-              <div className="stat-label">Total Patients</div>
-            </div>
-          </div>
           
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: '#dcfce7' }}>
-              <Activity size={24} style={{ color: '#166534' }} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{statistics.total_visits || 0}</div>
-              <div className="stat-label">Total Visits</div>
-            </div>
-          </div>
-          
-          <div className="stat-card">
-            <div className="stat-icon" style={{ background: '#fef3c7' }}>
-              <Calendar size={24} style={{ color: '#92400e' }} />
-            </div>
-            <div className="stat-content">
-              <div className="stat-value">{statistics.visits_last_30_days || 0}</div>
-              <div className="stat-label">Last 30 Days</div>
-            </div>
-          </div>
           
           <div className="stat-card">
             <div className="stat-icon" style={{ background: '#f3e8ff' }}>

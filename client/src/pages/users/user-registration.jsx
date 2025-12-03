@@ -207,13 +207,13 @@ const UserRegistration = () => {
         { value: "2", label: "Hospital Admin" },
         { value: "3", label: "Medical Practitioner (e.g. doctors)" },
         { value: "4", label: "Medical Staff (e.g Nurses)" },
-        { value: "5", label: "Receptionist" }
+        { value: "5", label: "Non-medical Staff (e.g Receptionist)" }
       ];
     } else if (user?.role_id === 2) {
       return [
         { value: "3", label: "Medical Practitioner (e.g. doctors)" },
         { value: "4", label: "Medical Staff (e.g Nurses)" },
-        { value: "5", label: "Receptionist" }
+        { value: "5", label: "Non-medical Staff (e.g Receptionist)" }
       ];
     }
     return [];

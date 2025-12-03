@@ -126,42 +126,65 @@ export const signInUser = async (req, res) => {
   }
 };
 
+
 export const doctorSelectHospital = async (req, res) => {
   try {
     const { user_id } = req.user;
     const { hospital_id, branch_id } = req.body;
-    if (!hospital_id || !branch_id) {
+    
+    // Only hospital_id is required, branch_id can be null
+    if (!hospital_id) {
       return res.status(400).json({
         status: "failed",
-        message: "Please provide hospital_id and branch_id",
+        message: "Please provide hospital_id",
       });
     }
-    // Verify that the hospital and branch belong to the doctor
-    const hospitalResults = await pool.query(
-      `SELECT 
+    
+    // Build query based on whether branch_id is provided
+    let query, params;
+    
+    if (branch_id !== null && branch_id !== undefined) {
+      // Verify with specific branch_id
+      query = `SELECT 
           ph.hospital_id,
           h.hospital_name,
           ph.branch_id
        FROM provider_hospitals ph
        JOIN healthcare_providers hp ON ph.provider_id = hp.provider_id
        JOIN hospitals h ON ph.hospital_id = h.hospital_id
-       WHERE hp.user_id = $1 AND ph.hospital_id = $2 AND ph.branch_id = $3`,
-      [user_id, hospital_id, branch_id]
-    );
+       WHERE hp.user_id = $1 AND ph.hospital_id = $2 AND ph.branch_id = $3`;
+      params = [user_id, hospital_id, branch_id];
+    } else {
+      // Verify with null branch_id
+      query = `SELECT 
+          ph.hospital_id,
+          h.hospital_name,
+          ph.branch_id
+       FROM provider_hospitals ph
+       JOIN healthcare_providers hp ON ph.provider_id = hp.provider_id
+       JOIN hospitals h ON ph.hospital_id = h.hospital_id
+       WHERE hp.user_id = $1 AND ph.hospital_id = $2 AND ph.branch_id IS NULL`;
+      params = [user_id, hospital_id];
+    }
+    
+    const hospitalResults = await pool.query(query, params);
+    
     if (hospitalResults.rows.length === 0) {
       return res.status(400).json({
         status: "failed",
         message: "Invalid hospital_id or branch_id for this user",
       });
     }
-    // Create new JWT with selected hospital and branch
+    
+    // Create new JWT with selected hospital and branch (branch can be null)
     const token = createJWT({
       user_id: user_id,
       role_id: req.user.role_id,
       hospital_id: hospital_id,
-      branch_id: branch_id,
+      branch_id: branch_id,  // Can be null
       must_change_password: req.user.must_change_password,
     });
+    
     res.status(200).json({
       status: "success",
       message: "Hospital and branch selected successfully",

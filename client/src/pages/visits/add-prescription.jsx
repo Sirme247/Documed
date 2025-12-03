@@ -65,7 +65,7 @@ const RecordPrescription = () => {
       toast.success(res.message || "Prescription recorded successfully!");
       
       if(visit_id){
-        navigate(`/visits/${visit_id}`)
+        navigate(`/visits/details/${visit_id}`)
       }else{
         reset();
       }
@@ -82,7 +82,7 @@ const RecordPrescription = () => {
       <h2>Record Prescription</h2>
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Visit Information</h3>
           
           <div className="form-group">
@@ -96,7 +96,7 @@ const RecordPrescription = () => {
               <div className="error-message">{errors.visit_id.message}</div>
             )}
           </div>
-        </div>
+        </div> */}
 
         <div className="form-section">
           <h3>Medication Details</h3>

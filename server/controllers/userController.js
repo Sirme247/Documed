@@ -2142,25 +2142,24 @@ export const getUserProfile = async (req, res) => {
         provider.hospitals = providerHospitalsRes.rows.filter(row => row.hospital_id);
         provider.branches = providerHospitalsRes.rows.filter(row => row.branch_id);
 
-        const statsRes = await pool.query(
-          `SELECT 
-             COUNT(DISTINCT v.visit_id) as total_visits,
-             COUNT(DISTINCT v.patient_id) as total_patients,
-             COUNT(DISTINCT CASE WHEN v.visit_date >= CURRENT_DATE - INTERVAL '30 days' THEN v.visit_id END) as visits_last_30_days,
-             COUNT(DISTINCT CASE WHEN v.visit_date >= CURRENT_DATE - INTERVAL '7 days' THEN v.visit_id END) as visits_last_7_days
-           FROM visits v
-           WHERE v.provider_id = $1`,
-          [provider.provider_id]
-        );
+        // const statsRes = await pool.query(
+        //   `SELECT 
+        //      COUNT(DISTINCT v.visit_id) as total_visits,
+        //      COUNT(DISTINCT v.patient_id) as total_patients,
+        //      COUNT(DISTINCT CASE WHEN v.visit_date >= CURRENT_DATE - INTERVAL '30 days' THEN v.visit_id END) as visits_last_30_days,
+        //      COUNT(DISTINCT CASE WHEN v.visit_date >= CURRENT_DATE - INTERVAL '7 days' THEN v.visit_id END) as visits_last_7_days
+        //    FROM visits v
+        //    WHERE v.provider_id = $1`,
+        //   [provider.provider_id]
+        // );
 
-        if (statsRes.rows.length > 0) {
+       
           statistics = {
-            ...statsRes.rows[0],
             license_status: provider.license_expiry 
               ? new Date(provider.license_expiry) > new Date() ? 'Valid' : 'Expired'
               : 'Not Set'
           };
-        }
+        
       }
     }
 

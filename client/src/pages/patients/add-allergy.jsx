@@ -92,7 +92,7 @@ const AddAllergy = () => {
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Patient Information</h3>
           
           <div className="form-group">
@@ -107,7 +107,7 @@ const AddAllergy = () => {
               <div className="error-message">{errors.patient_id.message}</div>
             )}
           </div>
-        </div>
+        </div> */}
 
         <div className="form-section">
           <h3>Allergy Details</h3>

@@ -302,7 +302,7 @@ const RecordImagingStudy = () => {
 
         setTimeout(() => {
           if (visit_id_from_state) {
-            navigate(`/visits/${visit_id_from_state}`);
+            navigate(`/visits/details/${visit_id_from_state}`);
           } else {
             clearAllFiles();
             setFindings('');
@@ -636,7 +636,7 @@ const RecordImagingStudy = () => {
         opacity: loading ? 0.5 : 1,
         pointerEvents: loading ? 'none' : 'auto'
       }}>
-        <div style={{ marginBottom: '24px' }}>
+        {/* <div style={{ marginBottom: '24px' }}>
           <h3 style={{ fontSize: '18px', fontWeight: '600', marginBottom: '16px' }}>
             Visit Information
           </h3>
@@ -664,7 +664,7 @@ const RecordImagingStudy = () => {
               }}
             />
           </div>
-        </div>
+        </div> */}
 
         <div style={{ marginBottom: '24px' }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>

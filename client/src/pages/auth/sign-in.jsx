@@ -46,42 +46,43 @@ const SignIn = () => {
     reset(); 
   };
 
-  const onSubmit = async (data) => {
-    console.log("Form data being sent:", data);
+ const onSubmit = async (data) => {
+  console.log("Form data being sent:", data);
 
-    try {
-      setLoading(true);
-      const { data: res } = await api.post("/auth/sign-in", data);
+  try {
+    setLoading(true);
+    const { data: res } = await api.post("/auth/sign-in", data);
 
-      const { token, user, hospitals } = res;
+    const { token, user, hospitals } = res;
 
-      // Check if doctor has multiple hospitals and needs to select
-      if (user.role_id === 3 && hospitals && hospitals.length > 1) {
-        // Store temporary data for hospital selection
-        sessionStorage.setItem("pendingAuth", JSON.stringify({ 
-          token, 
-          user, 
-          hospitals 
-        }));
-        
-        // Redirect to hospital selection page
-        navigate("/select-hospital");
-        return;
-      }
-
-      // Normal login flow for single hospital or non-doctor
-      setAuthToken(token);
-      useStore.getState().setCredentials({ token, ...user });
-      localStorage.setItem("user", JSON.stringify({ token, ...user }));
-
-      navigate("/"); 
-    } catch (error) {
-      console.error(error);
-      toast.error(error?.response?.data?.message || error.message);
-    } finally {
-      setLoading(false);
+    // Check if doctor has multiple hospitals and needs to select
+    if (user.role_id === 3 && hospitals && hospitals.length > 1) {
+      // Store temporary data for hospital selection
+      sessionStorage.setItem("pendingAuth", JSON.stringify({ 
+        token, 
+        user, 
+        hospitals 
+      }));
+      
+      // Redirect to hospital selection page
+      navigate("/select-hospital");
+      return;
     }
-  };
+
+    // Normal login flow for single hospital or non-doctor
+    setAuthToken(token);
+    useStore.getState().setCredentials({ token, ...user });
+    localStorage.setItem("user", JSON.stringify({ token, ...user }));
+
+    navigate("/"); 
+  } catch (error) {
+    console.error(error);
+    // The error is caught here, so we never reach the user.role_id check
+    toast.error(error?.response?.data?.message || error.message);
+  } finally {
+    setLoading(false);
+  }
+};
 
   return (
     <div className="form-wrapper">

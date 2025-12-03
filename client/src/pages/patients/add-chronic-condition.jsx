@@ -97,7 +97,7 @@ const AddChronicCondition = () => {
       )}
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Patient Information</h3>
           
           <div className="form-group">
@@ -112,7 +112,7 @@ const AddChronicCondition = () => {
               <div className="error-message">{errors.patient_id.message}</div>
             )}
           </div>
-        </div>
+        </div> */}
 
         <div className="form-section">
           <h3>Condition Details</h3>

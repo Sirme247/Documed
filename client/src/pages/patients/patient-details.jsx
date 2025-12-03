@@ -650,12 +650,12 @@ const PatientDetails = () => {
             {/* Allergies */}
             <div className="info-card">
               <h3>Allergies</h3>
-              <button
+              {/* <button
                 onClick={() => navigate(`/patients/add-allergy`, { state: { patient } })} 
                 className="btn-secondary"
               >
                 Add Allergy
-              </button>
+              </button> */}
               {medicalHistory.allergies.length === 0 ? (
                 <p className="empty-state">No allergies recorded</p>
               ) : (
@@ -684,12 +684,12 @@ const PatientDetails = () => {
             {/* Medications */}
             <div className="info-card">
               <h3>Medications</h3>
-              <button
+              {/* <button
                 onClick={() => navigate(`/patients/add-medication`, { state: { patient } })} 
                 className="btn-secondary"
               >
                 Add Medication
-              </button>
+              </button> */}
               {medicalHistory.medications.length === 0 ? (
                 <p className="empty-state">No medications recorded</p>
               ) : (
@@ -723,12 +723,12 @@ const PatientDetails = () => {
             {/* Chronic Conditions */}
             <div className="info-card">
               <h3>Chronic Conditions</h3>
-              <button
+              {/* <button
                 onClick={() => navigate(`/patients/add-chronic-conditions`, { state: { patient } })} 
                 className="btn-secondary"
               >
                 Add Chronic Condition
-              </button>
+              </button> */}
               {medicalHistory.chronic_conditions.length === 0 ? (
                 <p className="empty-state">No chronic conditions recorded</p>
               ) : (
@@ -772,12 +772,12 @@ const PatientDetails = () => {
             {/* Family History */}
             <div className="info-card">
               <h3>Family History</h3>
-              <button
+              {/* <button
                 onClick={() => navigate(`/patients/add-family-history`, { state: { patient } })} 
                 className="btn-secondary"
               >
                 Add Family History
-              </button>
+              </button> */}
               {medicalHistory.family_history.length === 0 ? (
                 <p className="empty-state">No family history recorded</p>
               ) : (

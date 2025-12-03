@@ -59,7 +59,7 @@ const RecordTreatment = () => {
 
       toast.success(res.message || "Treatment recorded successfully!");
       if (visit_id) {
-        navigate(`/visits/${visit_id}`);
+        navigate(`/visits/details/${visit_id}`);
       } else {
         reset();
       }
@@ -76,7 +76,7 @@ const RecordTreatment = () => {
       <h2>Record Treatment</h2>
 
       <form onSubmit={handleSubmit(onSubmit)} className="form">
-        <div className="form-section">
+        {/* <div className="form-section">
           <h3>Visit Information</h3>
           
           <div className="form-group">
@@ -91,7 +91,7 @@ const RecordTreatment = () => {
               <div className="error-message">{errors.visit_id.message}</div>
             )}
           </div>
-        </div>
+        </div> */}
 
         <div className="form-section">
           <h3>Treatment Details</h3>

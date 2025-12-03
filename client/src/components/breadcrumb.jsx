@@ -15,52 +15,65 @@ const Breadcrumb = () => {
   const MAX_VISIBLE_CRUMBS = 4;
 
   const routeMap = {
-    '/patients/register': 'RegisterPatient',
-    '/patients/list': 'PatientList',
-    '/patients/frequent': 'FrequentPatients',
-    '/patients/add-allergy': 'AddAllergy',
-    '/patients/add-chronic-condition': 'AddChronicCondition',
-    '/patients/add-family-history': 'AddFamilyHistory',
-    '/patients/add-medication': 'AddMedication',
-    '/patients/add-social-history': 'AddSocialHistory',
+    // Patient Management
+    '/patients/register': 'Register Patient',
+    '/patients/list': 'Patient List',
+    '/patients/frequent': 'Frequent Patients',
+    '/patients/add-allergy': 'Add Allergy',
+    '/patients/add-chronic-condition': 'Add Chronic Condition',
+    '/patients/add-family-history': 'Add Family History',
+    '/patients/add-medication': 'Add Medication',
+    '/patients/add-social-history': 'Add Social History',
     
-    '/visits/new': 'NewVisit',
-    '/visits/record-diagnosis': 'RecordDiagnosis',
-    '/visits/record-imaging-results': 'RecordImagingResults',
-    '/visits/record-lab-results': 'RecordLabResults',
-    '/visits/record-vitals': 'RecordVitals',
-    '/visits/record-prescriptions': 'RecordPrescriptions',
-    '/visits/record-treatment': 'RecordTreatment',
-    '/visits/hospital/today': 'TodayVisits',
-    '/visits/hospital/all': 'AllVisits',
-    '/visits/hospital/last-week': 'LastWeekVisits',
+    // Visit Management
+    '/visits/new': 'New Visit',
+    '/visits/open': 'Open Visits',
+    '/visits/record-diagnosis': 'Record Diagnosis',
+    '/visits/record-imaging-results': 'Record Imaging Results',
+    '/visits/record-lab-results': 'Record Lab Results',
+    '/visits/record-vitals': 'Record Vitals',
+    '/visits/record-prescriptions': 'Record Prescriptions',
+    '/visits/record-treatment': 'Record Treatment',
+    '/visits/hospital/today': "Today's Visits",
+    '/visits/hospital/all': 'All Visits',
+    '/visits/hospital/last-week': 'Last Week Visits',
     
-    '/hospitals/register': 'RegisterHospital',
-    '/hospitals/list': 'HospitalList',
-    '/hospitals/register-branch': 'RegisterBranch',
-    '/hospitals/current/get-profile': 'HospitalProfile',
+    // Hospital Management
+    '/hospitals/register': 'Register Hospital',
+    '/hospitals/list': 'Hospital List',
+    '/hospitals/register-branch': 'Register Branch',
+    '/hospitals/current/get-profile': 'Hospital Profile',
     
-    '/users/register': 'RegisterUser',
-    '/users/list': 'UserList',
-    '/users/register-existing-doctor': 'RegisterExistingDoctor',
-    '/users/hospital-users': 'HospitalUsers',
+    // User Management
+    '/users/register': 'Register User',
+    '/users/list': 'User List',
+    '/users/register-existing-doctor': 'Register Existing Doctor',
+    '/users/hospital-users': 'Hospital Users',
     
-    '/settings/user': 'UserSettings',
-    '/settings/system': 'SystemSettings',
+    // Settings
+    '/settings/user': 'User Settings',
+    '/settings/system': 'System Settings',
+    '/profile/user': 'My Profile',
     
-    '/audits/logs': 'AuditLogs',
+    // Audit
+    '/audits/logs': 'Audit Logs',
     
-    '/dashboard/global-admin': 'GlobalAdminDashboard',
-    '/dashboard/local-admin': 'LocalAdminDashboard',
-    '/dashboard/doctor': 'DoctorDashboard',
-    '/dashboard/nurse': 'NurseDashboard',
-    '/dashboard/receptionist': 'ReceptionistDashboard',
+    // Dashboards
+    '/dashboard/global-admin': 'Dashboard',
+    '/dashboard/local-admin': 'Dashboard',
+    '/dashboard/doctor': 'Dashboard',
+    '/dashboard/nurse': 'Dashboard',
+    '/dashboard/receptionist': 'Dashboard',
     
-    '/password-change': 'PasswordChange',
-    '/password-reset': 'PasswordReset',
-    '/select-hospital': 'SelectHospital',
-    '/sign-in': 'SignIn',
-    '/sign-out': 'SignOut',
+    // Branches
+    '/branches/list': 'Branch List',
+    
+    // Authentication
+    '/password-change': 'Change Password',
+    '/password-reset': 'Reset Password',
+    '/select-hospital': 'Select Hospital',
+    '/sign-in': 'Sign In',
+    '/sign-out': 'Sign Out',
   };
 
   // Get the display name for a path
@@ -72,33 +85,99 @@ const Breadcrumb = () => {
 
     // Handle dynamic routes with IDs
     const pathSegments = path.split('/').filter(Boolean);
-    const lastSegment = pathSegments[pathSegments.length - 1];
     
-    // Check if it's an ID
-    const isId = /^[a-f0-9-]{36}$|^\d+$/.test(lastSegment);
-    if (isId && pathSegments.length > 1) {
-      const parentSegment = pathSegments[pathSegments.length - 2];
-      const singular = parentSegment.slice(0, -1); // Remove 's'
-      return `${singular.charAt(0).toUpperCase() + singular.slice(1)}Details`;
+    // Handle patient details routes
+    if (pathSegments[0] === 'patients' && pathSegments.length >= 2) {
+      const patientId = pathSegments[1];
+      const isId = /^[a-f0-9-]{36}$|^\d+$/.test(patientId);
+      
+      if (isId) {
+        if (pathSegments.length === 2) {
+          return 'Patient Details';
+        }
+        if (pathSegments[2] === 'edit') {
+          return 'Edit Patient';
+        }
+        if (pathSegments[2] === 'edit-medicals') {
+          return 'Edit Medical History';
+        }
+      }
+    }
+    
+    // Handle visit details routes
+    if (pathSegments[0] === 'visits') {
+      if (pathSegments[1] === 'patients' && pathSegments.length === 3) {
+        return 'Patient Visits';
+      }
+      if (pathSegments[1] === 'details' && pathSegments.length === 3) {
+        return 'Visit Details';
+      }
+    }
+    
+    // Handle user details routes
+    if (pathSegments[0] === 'users' && pathSegments.length >= 2) {
+      const userId = pathSegments[1];
+      const isId = /^[a-f0-9-]{36}$|^\d+$/.test(userId);
+      
+      if (isId) {
+        if (pathSegments.length === 2) {
+          return 'User Details';
+        }
+        if (pathSegments[2] === 'edit') {
+          return 'Edit User';
+        }
+      }
+    }
+    
+    // Handle hospital details routes
+    if (pathSegments[0] === 'hospitals' && pathSegments.length >= 2) {
+      const hospitalId = pathSegments[1];
+      const isId = /^[a-f0-9-]{36}$|^\d+$/.test(hospitalId);
+      
+      if (isId) {
+        if (pathSegments.length === 2) {
+          return 'Hospital Details';
+        }
+        if (pathSegments[2] === 'edit') {
+          return 'Edit Hospital';
+        }
+      }
+    }
+    
+    // Handle branch details routes
+    if (pathSegments[0] === 'branches' && pathSegments.length === 2) {
+      const branchId = pathSegments[1];
+      const isId = /^[a-f0-9-]{36}$|^\d+$/.test(branchId);
+      
+      if (isId) {
+        return 'Branch Details';
+      }
+    }
+    
+    // Handle AI summary route
+    if (pathSegments[0] === 'ai-summary' && pathSegments.length === 2) {
+      return 'AI Summary';
     }
 
-    // Handle edit routes
-    if (lastSegment === 'edit' && pathSegments.length > 2) {
-      const parentSegment = pathSegments[pathSegments.length - 3];
-      const singular = parentSegment.slice(0, -1);
-      return `Edit${singular.charAt(0).toUpperCase() + singular.slice(1)}`;
-    }
-
-    // Convert to PascalCase as fallback
+    // Convert to Title Case as fallback
+    const lastSegment = pathSegments[pathSegments.length - 1];
     return lastSegment
       .split('-')
       .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-      .join('');
+      .join(' ');
   };
 
   // Track navigation changes
   useEffect(() => {
-    const excludedPaths = ['/sign-in', '/sign-out', '/password-reset', '/select-hospital', '/unauthorized', '/'];
+    const excludedPaths = [
+      '/sign-in', 
+      '/sign-out', 
+      '/password-reset', 
+      '/select-hospital', 
+      '/unauthorized', 
+      '/',
+      '/overview'
+    ];
     
     // Check if it's a dashboard route
     const isDashboard = location.pathname.startsWith('/dashboard/');
@@ -117,7 +196,16 @@ const Breadcrumb = () => {
   }, [location.pathname, addToNavigationHistory, clearNavigationHistory]);
 
   const breadcrumbs = useMemo(() => {
-    const excludedPaths = ['/sign-in', '/sign-out', '/password-reset', '/select-hospital', '/unauthorized', '/'];
+    const excludedPaths = [
+      '/sign-in', 
+      '/sign-out', 
+      '/password-reset', 
+      '/select-hospital', 
+      '/unauthorized', 
+      '/',
+      '/overview'
+    ];
+    
     if (excludedPaths.includes(location.pathname)) {
       return [];
     }
